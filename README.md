@@ -20,27 +20,28 @@ Search Architecture: Dual-Embedding Hybrid Search (Dense + BM25 Sparse)
 
 
 **Repository Structure**
+```
 codereviewai/
 ├── apps/
-│   ├── api/                    # Express — webhook + REST gateway
+│   ├── api/
 │   │   ├── src/
 │   │   │   ├── routes/
 │   │   │   │   ├── webhook.js
 │   │   │   │   └── reviews.js
 │   │   │   ├── queue/
-│   │   │   │   ├── index.js    # Queue definitions
-│   │   │   │   └── worker.js   # Background worker processing
+│   │   │   │   ├── index.js
+│   │   │   │   └── worker.js
 │   │   │   ├── services/
-│   │   │   │   ├── github.js   # Octokit client integration
-│   │   │   │   └── agent-bridge.js # HTTP link to FastAPI
+│   │   │   │   ├── github.js
+│   │   │   │   └── agent-bridge.js
 │   │   │   └── db/
-│   │   │       └── index.js    # Postgres connector
+│   │   │       └── index.js
 │   │   └── package.json
 │   │
-│   └── agent/                  # Python — LangGraph Core
+│   └── agent/
 │       ├── graph/
-│       │   ├── state.py        # Global state definition
-│       │   ├── supervisor.py   # Multi-agent coordinator
+│       │   ├── state.py
+│       │   ├── supervisor.py
 │       │   ├── agents/
 │       │   │   ├── security.py
 │       │   │   ├── performance.py
@@ -49,13 +50,14 @@ codereviewai/
 │       │       ├── aggregator.py
 │       │       └── github_poster.py
 │       ├── rag/
-│       │   ├── indexer.py      # Codebase parsing & ingestion
-│       │   └── retriever.py    # Hybrid dense-sparse retrieval
-│       ├── main.py             # FastAPI exposure layer
+│       │   ├── indexer.py
+│       │   └── retriever.py
+│       ├── main.py
 │       └── requirements.txt
 │
 ├── docker-compose.yml
 └── .env
+```
 
 
 **🚀 Environment Configuration**
