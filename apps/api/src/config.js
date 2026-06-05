@@ -8,7 +8,7 @@ export const config = {
   jwtSecret: process.env.JWT_SECRET ?? "dev-secret",
   webhookSecret: process.env.GITHUB_WEBHOOK_SECRET ?? "",
   redisUrl: process.env.REDIS_URL ?? "redis://localhost:6379",
-  databaseUrl: process.env.DATABASE_URL,
+  databaseUrl: process.env.NEON_DATABASE_URL ?? process.env.DATABASE_URL,
   autoMigrate: process.env.DB_AUTO_MIGRATE !== "false",
   queueConcurrency: Number(process.env.QUEUE_CONCURRENCY ?? 3),
   agentUrl: process.env.AGENT_URL ?? "http://localhost:8000",

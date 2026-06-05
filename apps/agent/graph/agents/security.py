@@ -1,6 +1,7 @@
 import re
 
 from graph.agents.common import finding, iter_added_lines
+from llm.groq import diff_excerpt, groq_json, normalize_findings
 from rag.retriever import retrieve_context
 
 SECRET_PATTERNS = [
@@ -12,6 +13,7 @@ SECRET_PATTERNS = [
 
 async def security_agent(state):
     findings = []
+    llm_findings = await _groq_security_findings(state)
     namespace = state.get("repository", {}).get("fullName", "").replace("/", "__")
     for file, line, code in iter_added_lines(state.get("files", [])):
         lower = code.lower()
@@ -22,4 +24,22 @@ async def security_agent(state):
             findings.append(finding("security", "high", "JWT is decoded without verification", "Verify JWT signatures with the expected algorithm, issuer, and audience.", file, line, 0.86, rag_context=context))
         if re.search(r"select .* \+|where .* \+", lower):
             findings.append(finding("security", "high", "SQL appears to be built through string concatenation", "Use parameterized queries or a query builder for untrusted input.", file, line, 0.82, rag_context=context))
-    return findings
+    return llm_findings + findings
+
+
+async def _groq_security_findings(state):
+    system = (
+        "You are CodeReviewAI's security reviewer. Return JSON only with a findings array. "
+        "Each finding must include category, severity, title, body, path, line, confidence. "
+        "Focus on exploitable auth, injection, secret, permission, data exposure, and supply-chain risks."
+    )
+    user = (
+        f"Repository: {state.get('repository', {}).get('fullName')}\n"
+        f"Pull request: {state.get('pullRequest', {}).get('title', '')}\n"
+        f"Diff:\n{diff_excerpt(state.get('files', []))}"
+    )
+    try:
+        result = await groq_json(system, user)
+        return normalize_findings(result, "security")
+    except Exception:
+        return []

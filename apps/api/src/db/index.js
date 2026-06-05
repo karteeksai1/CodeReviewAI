@@ -12,13 +12,13 @@ export const pool = config.databaseUrl
   : null;
 
 export async function query(sql, params = []) {
-  if (!pool) throw new Error("DATABASE_URL is not configured");
+  if (!pool) throw new Error("NEON_DATABASE_URL or DATABASE_URL is not configured");
   return pool.query(sql, params);
 }
 
 export async function initDb() {
   if (!pool) {
-    logger.warn("DATABASE_URL is not configured; persistence is disabled");
+    logger.warn("NEON_DATABASE_URL or DATABASE_URL is not configured; persistence is disabled");
     return;
   }
   if (!config.autoMigrate) return;

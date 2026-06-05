@@ -1,7 +1,6 @@
-import hashlib
 import os
-import re
 from pathlib import Path
+from rag.embeddings import embed_text, tokenize
 
 try:
     from dotenv import load_dotenv
@@ -11,10 +10,6 @@ except Exception:
 
 SKIP_DIRS = {".git", "node_modules", ".venv", "venv", "__pycache__", ".next", "dist", "build"}
 TEXT_EXTENSIONS = {".js", ".jsx", ".ts", ".tsx", ".py", ".go", ".java", ".rb", ".php", ".rs", ".sql", ".md", ".json", ".yml", ".yaml"}
-
-
-def tokenize(text):
-    return [token.lower() for token in re.findall(r"[a-zA-Z0-9_]+", text)]
 
 
 def chunk_text(text, max_chars=1800, overlap=250):
@@ -43,8 +38,8 @@ async def index_repository(repo_path, namespace):
         text = source_file.read_text(encoding="utf8", errors="ignore")
         for index, chunk in enumerate(chunk_text(text)):
             vectors.append({
-                "id": hashlib.sha1(f"{rel_path}:{index}".encode("utf8")).hexdigest(),
-                "values": stable_hash_embedding(chunk),
+                "id": f"{rel_path}:{index}".replace("/", "__"),
+                "values": await embed_text(chunk),
                 "metadata": {"path": rel_path, "chunk_index": index, "bm25_terms": tokenize(chunk)[:300], "text": chunk[:3500]},
             })
     client = get_pinecone()
@@ -61,12 +56,3 @@ def get_pinecone():
         return Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
     except Exception:
         return None
-
-
-def stable_hash_embedding(text, dims=384):
-    values = [0.0] * dims
-    for token in tokenize(text):
-        digest = hashlib.sha256(token.encode("utf8")).digest()
-        values[int.from_bytes(digest[:2], "big") % dims] += 1.0
-    norm = sum(value * value for value in values) ** 0.5 or 1.0
-    return [value / norm for value in values]

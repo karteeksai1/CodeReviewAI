@@ -1,6 +1,7 @@
 import os
 
-from rag.indexer import get_pinecone, stable_hash_embedding, tokenize
+from rag.embeddings import embed_text, tokenize
+from rag.indexer import get_pinecone
 
 
 async def retrieve_context(namespace, query, limit=3):
@@ -10,7 +11,7 @@ async def retrieve_context(namespace, query, limit=3):
     try:
         result = client.Index(os.getenv("PINECONE_INDEX")).query(
             namespace=namespace,
-            vector=stable_hash_embedding(query),
+            vector=await embed_text(query),
             top_k=limit,
             include_metadata=True,
             filter={"bm25_terms": {"$in": tokenize(query)[:20]}},
