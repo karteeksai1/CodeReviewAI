@@ -1,74 +1,39 @@
 # CodeReviewAI
-CodeReviewAI is an enterprise-grade, asynchronous, multi-agent code review system designed to analyze pull requests in parallel. By combining an ultra-fast Node.js ingest layer with a distributed LangGraph supervisor workflow and a hybrid-search codebase RAG, CodeReviewAI provides context-aware, deep architectural reviews that look beyond simple lint rules.
 
+Async PR reviewer with an Express webhook/API, Redis-backed BullMQ workers, a FastAPI + LangGraph agent layer, and RAG over repository source context.
 
-**🛠️ Tech Stack**
-Ingest & Orchestration Layer
-Runtime: Node.js
-Framework: Express
-Task Queue: Bull (Redis-backed)
-Database: PostgreSQL (Neon)
-Git Integration: Octokit (GitHub Apps Auth)
+No Docker is required. The intended deployment target is Render for the API, worker, agent, Redis, and Postgres, plus Vercel for the web dashboard.
 
+## Structure
 
-**AI & Agentic Layer**
-Runtime: Python
-Framework: FastAPI
-Agent Orchestration: LangGraph (Supervisor Pattern)
-Vector Database: Pinecone (Per-repo namespaces)
-Search Architecture: Dual-Embedding Hybrid Search (Dense + BM25 Sparse)
-
-
-**Repository Structure**
-```
-codereviewai/
-├── apps/
-│   ├── api/
-│   │   ├── src/
-│   │   │   ├── routes/
-│   │   │   │   ├── webhook.js
-│   │   │   │   └── reviews.js
-│   │   │   ├── queue/
-│   │   │   │   ├── index.js
-│   │   │   │   └── worker.js
-│   │   │   ├── services/
-│   │   │   │   ├── github.js
-│   │   │   │   └── agent-bridge.js
-│   │   │   └── db/
-│   │   │       └── index.js
-│   │   └── package.json
-│   │
-│   └── agent/
-│       ├── graph/
-│       │   ├── state.py
-│       │   ├── supervisor.py
-│       │   ├── agents/
-│       │   │   ├── security.py
-│       │   │   ├── performance.py
-│       │   │   └── style.py
-│       │   └── nodes/
-│       │       ├── aggregator.py
-│       │       └── github_poster.py
-│       ├── rag/
-│       │   ├── indexer.py
-│       │   └── retriever.py
-│       ├── main.py
-│       └── requirements.txt
-│
-├── docker-compose.yml
-└── .env
+```text
+apps/api      Express webhook, REST API, BullMQ queue, worker, GitHub App services
+apps/agent    FastAPI + LangGraph supervisor, agents, aggregation, codebase RAG
+apps/web      Next.js dashboard for Vercel
+render.yaml   Render blueprint
 ```
 
+## Local Setup
 
-**🚀 Environment Configuration**
-Create a root .env file containing the following properties:
-PORT=3000
-DATABASE_URL=postgresql://user:password@localhost:5432/codereviewai
-REDIS_URL=redis://localhost:6339
-GITHUB_APP_ID=your_github_app_id
-GITHUB_PRIVATE_KEY=your_multi_line_private_key
-GITHUB_WEBHOOK_SECRET=your_webhook_secret
-FASTAPI_URL=http://localhost:8000
-PINECONE_API_KEY=your_pinecone_key
-PINECONE_ENVIRONMENT=your_environment
-OPENAI_API_KEY=your_openai_key
+```bash
+cp .env.example .env
+npm install
+python -m venv apps/agent/.venv
+source apps/agent/.venv/bin/activate
+pip install -r apps/agent/requirements.txt
+```
+
+Run services in separate terminals:
+
+```bash
+npm run dev:api
+npm run dev:worker
+cd apps/agent && uvicorn main:app --reload --port 8000
+npm run dev:web
+```
+
+The GitHub webhook endpoint is `POST /webhook`. It verifies the HMAC signature and returns `202 Accepted` after enqueueing review work.
+
+## Deploy
+
+Use `render.yaml` for Render services. Deploy `apps/web` separately to Vercel and set `NEXT_PUBLIC_API_URL` to your Render API URL.

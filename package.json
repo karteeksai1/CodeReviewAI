@@ -1,0 +1,13 @@
+{
+  "name": "codereviewai",
+  "private": true,
+  "workspaces": ["apps/api", "apps/web"],
+  "scripts": {
+    "dev:api": "npm --workspace apps/api run dev",
+    "dev:worker": "npm --workspace apps/api run worker:dev",
+    "dev:web": "npm --workspace apps/web run dev",
+    "lint": "npm --workspaces run lint",
+    "start:api": "npm --workspace apps/api run start",
+    "start:worker": "npm --workspace apps/api run worker"
+  }
+}

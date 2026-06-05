@@ -1,0 +1,25 @@
+{
+  "name": "@codereviewai/api",
+  "version": "0.1.0",
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js",
+    "worker": "node src/queue/worker.js",
+    "worker:dev": "node --watch src/queue/worker.js",
+    "lint": "node --check src/server.js && node --check src/queue/worker.js"
+  },
+  "dependencies": {
+    "@octokit/auth-app": "^7.1.1",
+    "@octokit/rest": "^21.1.0",
+    "bullmq": "^5.34.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "ioredis": "^5.5.0",
+    "jsonwebtoken": "^9.0.2",
+    "pg": "^8.13.1",
+    "pino": "^9.6.0"
+  }
+}
