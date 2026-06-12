@@ -13,21 +13,27 @@ SECRET_PATTERNS = [
 
 async def security_agent(state):
     findings = []
-    llm_findings = await _groq_security_findings(state)
+    contexts = []
     namespace = state.get("repository", {}).get("fullName", "").replace("/", "__")
+    
     for file, line, code in iter_added_lines(state.get("files", [])):
         lower = code.lower()
         context = await retrieve_context(namespace, f"{file.get('path')} security auth")
+        contexts.extend([c.get("text") for c in context if c.get("text")])
+        
         if any(pattern.search(code) for pattern in SECRET_PATTERNS):
             findings.append(finding("security", "critical", "Potential secret committed in the diff", "A new line appears to contain a hard-coded credential. Move it to a secret store and rotate it.", file, line, 0.92, rag_context=context))
         if "jwt.decode" in lower and "verify" not in lower:
             findings.append(finding("security", "high", "JWT is decoded without verification", "Verify JWT signatures with the expected algorithm, issuer, and audience.", file, line, 0.86, rag_context=context))
         if re.search(r"select .* \+|where .* \+", lower):
             findings.append(finding("security", "high", "SQL appears to be built through string concatenation", "Use parameterized queries or a query builder for untrusted input.", file, line, 0.82, rag_context=context))
+            
+    context_str = "\n".join(set(contexts))
+    llm_findings = await _groq_security_findings(state, context_str)
     return llm_findings + findings
 
 
-async def _groq_security_findings(state):
+async def _groq_security_findings(state, context_str):
     system = (
         "You are CodeReviewAI's security reviewer. Return JSON only with a findings array. "
         "Each finding must include category, severity, title, body, path, line, confidence. "
@@ -36,6 +42,7 @@ async def _groq_security_findings(state):
     user = (
         f"Repository: {state.get('repository', {}).get('fullName')}\n"
         f"Pull request: {state.get('pullRequest', {}).get('title', '')}\n"
+        f"Codebase Context:\n{context_str}\n"
         f"Diff:\n{diff_excerpt(state.get('files', []))}"
     )
     try:

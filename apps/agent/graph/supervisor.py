@@ -7,6 +7,7 @@ from graph.agents.style import style_agent
 from graph.nodes.aggregator import aggregate_findings
 from graph.nodes.github_poster import prepare_github_post
 from graph.state import GraphState
+from llm.groq import groq_json
 
 try:
     from langgraph.graph import END, START, StateGraph
@@ -14,17 +15,22 @@ except Exception:
     END = START = StateGraph = None
 
 
-def supervisor_node(state: GraphState) -> GraphState:
-    plan = set()
-    for file in state.get("files", []):
-        path = file.get("path", "").lower()
-        patch = file.get("patch", "").lower()
-        if any(token in path for token in ["auth", "session", "token", "secret"]):
-            plan.add("security")
-        if any(token in patch for token in ["select", "query", "await", "for "]):
-            plan.add("performance")
-        plan.add("style")
-    return {"agent_plan": sorted(plan or {"security", "performance", "style"})}
+async def supervisor_node(state: GraphState) -> GraphState:
+    system = (
+        "You are a routing supervisor for CodeReviewAI. Analyze the provided PR diff and file paths. "
+        "Decide which review agents need to run. Options are: 'security', 'performance', 'style'. "
+        "Return a JSON object with a single key 'agent_plan' containing a list of the chosen agents. "
+        "Always include 'style'."
+    )
+    user = f"Diff:\n{state.get('diff', '')}"
+    
+    try:
+        result = await groq_json(system, user)
+        plan = result.get("agent_plan", ["security", "performance", "style"])
+    except Exception:
+        plan = ["security", "performance", "style"]
+        
+    return {"agent_plan": plan}
 
 
 async def security_node(state: GraphState) -> GraphState:
@@ -81,7 +87,7 @@ async def run_review(payload: dict[str, Any]) -> dict[str, Any]:
     if GRAPH is not None:
         final_state = await GRAPH.ainvoke(state)
     else:
-        state.update(supervisor_node(state))
+        state.update(await supervisor_node(state))
         security, performance, style = await asyncio.gather(security_agent(state), performance_agent(state), style_agent(state))
         state["findings"] = security + performance + style
         state.update(aggregate_findings(state))
