@@ -288,6 +288,12 @@ export async function listIndexingJobs(limit = 10) {
 
 export async function listReviewsByPr({ owner, repo, number }) {
   if (!pool) return [];
+  const prNumber = Number(number);
+  if (!Number.isInteger(prNumber) || prNumber < 1) {
+    const err = new Error("PR number must be numeric.");
+    err.statusCode = 400;
+    throw err;
+  }
   const result = await query(
     `select r.*, pr.number, pr.title, repositories.full_name,
       coalesce(json_agg(f.* order by f.created_at) filter (where f.id is not null), '[]'::json) as findings
@@ -298,7 +304,7 @@ export async function listReviewsByPr({ owner, repo, number }) {
      where repositories.owner = $1 and repositories.name = $2 and pr.number = $3
      group by r.id, pr.number, pr.title, repositories.full_name
      order by r.created_at desc`,
-    [owner, repo, Number(number)]
+    [owner, repo, prNumber]
   );
   return result.rows;
 }

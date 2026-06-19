@@ -6,6 +6,7 @@ import { authRouter } from "./routes/auth.js";
 import { reviewsRouter } from "./routes/reviews.js";
 import { webhookRouter } from "./routes/webhook.js";
 import { logger } from "./logger.js";
+import { publicError } from "./errors.js";
 
 const app = express();
 
@@ -29,8 +30,7 @@ app.use((req, res) => {
 
 app.use((err, _req, res, _next) => {
   logger.error({ err }, "request failed");
-  const statusCode = err.statusCode && err.statusCode < 500 ? err.statusCode : 500;
-  const message = statusCode < 500 ? err.message : "Something went wrong while handling the request.";
+  const { statusCode, message } = publicError(err);
   res.status(statusCode).json({ error: message });
 });
 

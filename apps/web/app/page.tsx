@@ -266,7 +266,7 @@ function ReviewsView(props: {
             placeholder="PR #"
             inputMode="numeric"
             value={props.number}
-            onChange={(event) => props.setNumber(event.target.value)}
+            onChange={(event) => props.setNumber(event.target.value.replace(/\D/g, ""))}
             aria-invalid={props.number.length > 0 && !props.prNumberValid}
           />
           <button onClick={props.lookup} disabled={!props.canSearch} title="Search reviews">

@@ -98,6 +98,12 @@ async function parseError(response: Response, fallback: string) {
   }
 }
 
+function assertNumericId(value: string, label: string) {
+  if (!/^\d+$/.test(value.trim())) {
+    throw new Error(`${label} must be numeric.`);
+  }
+}
+
 export async function fetchHealth() {
   const response = await fetch(`${API_URL}/health`, { cache: "no-store" });
   if (!response.ok) throw new Error("API health check failed");
@@ -124,7 +130,9 @@ export async function fetchMe(token: string) {
 }
 
 export async function fetchReviews(owner: string, repo: string, number: string, token: string) {
-  const params = new URLSearchParams({ owner, repo, number });
+  const prNumber = number.trim();
+  assertNumericId(prNumber, "PR number");
+  const params = new URLSearchParams({ owner, repo, number: prNumber });
   const response = await fetch(`${API_URL}/reviews/pr?${params}`, {
     cache: "no-store",
     headers: authHeaders(token)
