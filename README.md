@@ -42,11 +42,13 @@ Create the Pinecone index with the same dimension as the Hugging Face model outp
 Run services in separate terminals:
 
 ```bash
-npm run dev:api
+npm run dev:api    # Express API on http://localhost:3001
 npm run dev:worker
 cd apps/agent && uvicorn main:app --reload --port 8000
-npm run dev:web
+npm run dev:web    # Next.js dashboard on http://localhost:3000
 ```
+
+Open the dashboard at `http://localhost:3000/login`. Default credentials are `admin@codereviewai.local` / `changeme`.
 
 The GitHub webhook endpoint is `POST /webhook`. It verifies the HMAC signature and returns `202 Accepted` after enqueueing review work.
 

@@ -14,7 +14,7 @@ export type Review = {
   findings: Array<{ id: number; category: string; severity: string; title: string; path: string | null; line: number | null }>;
 };
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 
 function authHeaders(token: string): Record<string, string> {
   return { Authorization: `Bearer ${token}` };

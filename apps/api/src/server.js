@@ -16,6 +16,17 @@ app.use(express.json({ limit: "2mb" }));
 app.use("/auth", authRouter);
 app.use("/reviews", reviewsRouter);
 
+app.use((req, res) => {
+  if (req.method !== "GET") {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+  res.status(404).json({
+    error: "Not found",
+    hint: "This is the CodeReviewAI API. Open the dashboard at http://localhost:3000/login"
+  });
+});
+
 app.use((err, _req, res, _next) => {
   logger.error({ err }, "request failed");
   res.status(err.statusCode ?? 500).json({ error: err.message ?? "Internal server error" });
