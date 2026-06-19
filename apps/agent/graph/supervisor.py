@@ -1,4 +1,6 @@
 import asyncio
+from datetime import datetime, timezone
+from time import perf_counter
 from typing import Any
 
 from graph.agents.performance import performance_agent
@@ -77,6 +79,8 @@ GRAPH = build_graph()
 
 
 async def run_review(payload: dict[str, Any]) -> dict[str, Any]:
+    started = datetime.now(timezone.utc)
+    timer = perf_counter()
     state: GraphState = {
         "repository": payload["repository"],
         "pullRequest": payload["pullRequest"],
@@ -93,10 +97,26 @@ async def run_review(payload: dict[str, Any]) -> dict[str, Any]:
         state.update(aggregate_findings(state))
         state.update(await prepare_github_post(state))
         final_state = state
+    completed = datetime.now(timezone.utc)
+    duration_ms = int((perf_counter() - timer) * 1000)
+    planned = set(final_state.get("agent_plan", ["security", "performance", "style"]))
+    findings = final_state.get("findings", [])
+    agent_runs = [
+        {
+            "agent": agent,
+            "status": "completed" if agent in planned else "skipped",
+            "started_at": started.isoformat(),
+            "completed_at": completed.isoformat(),
+            "duration_ms": duration_ms,
+            "finding_count": len([item for item in findings if item.get("category") == agent]),
+        }
+        for agent in ["security", "performance", "style"]
+    ]
     return {
         "summary": final_state.get("summary", "Review complete."),
         "risk_score": final_state.get("risk_score", 0),
-        "findings": final_state.get("findings", []),
+        "findings": findings,
         "markdown": final_state.get("markdown", ""),
         "agent_plan": final_state.get("agent_plan", []),
+        "agent_runs": agent_runs,
     }

@@ -1,6 +1,6 @@
 import { Worker } from "bullmq";
 import { config } from "../config.js";
-import { createReview, initDb, insertFindings, updateReview, upsertPullRequest, upsertRepository } from "../db/index.js";
+import { createReview, initDb, insertFindings, updateReview, upsertAgentRuns, upsertPullRequest, upsertRepository } from "../db/index.js";
 import { logger } from "../logger.js";
 import { requestAgentReview } from "../services/agent-bridge.js";
 import { fetchPullRequestContext, postReviewSummary } from "../services/github.js";
@@ -19,12 +19,18 @@ const worker = new Worker(REVIEW_QUEUE_NAME, async (job) => {
   const repoRow = await upsertRepository(repository, installationId);
   const prRow = await upsertPullRequest(repoRow?.id, pullRequest);
   const review = await createReview({ pullRequestId: prRow?.id, queueJobId: String(job.id), status: "in_progress" });
+  await upsertAgentRuns(review?.id, ["security", "performance", "style"].map((agent) => ({
+    agent,
+    status: "running",
+    startedAt: new Date()
+  })));
 
   try {
     const context = await fetchPullRequestContext({ owner, repo, pullNumber: pullRequest.number, installationId });
     const agentResult = await requestAgentReview(context);
     const findings = agentResult.findings ?? [];
     await insertFindings(review?.id, findings);
+    await upsertAgentRuns(review?.id, agentResult.agent_runs ?? []);
     const posted = await postReviewSummary({ owner, repo, pullNumber: pullRequest.number, installationId, headSha: context.pullRequest.headSha, summary: agentResult.summary, findings });
     await updateReview(review?.id, { status: "completed", summary: agentResult.summary, riskScore: agentResult.risk_score, postedToGithub: posted, completedAt: new Date() });
     return { findings: findings.length, riskScore: agentResult.risk_score, posted };

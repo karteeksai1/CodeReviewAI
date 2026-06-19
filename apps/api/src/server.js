@@ -29,7 +29,9 @@ app.use((req, res) => {
 
 app.use((err, _req, res, _next) => {
   logger.error({ err }, "request failed");
-  res.status(err.statusCode ?? 500).json({ error: err.message ?? "Internal server error" });
+  const statusCode = err.statusCode && err.statusCode < 500 ? err.statusCode : 500;
+  const message = statusCode < 500 ? err.message : "Something went wrong while handling the request.";
+  res.status(statusCode).json({ error: message });
 });
 
 await initDb();

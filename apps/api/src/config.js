@@ -20,6 +20,8 @@ export const config = {
   agentUrl: process.env.AGENT_URL ?? "http://localhost:8000",
   github: {
     appId: process.env.GITHUB_APP_ID,
+    appName: process.env.GITHUB_APP_NAME,
+    installUrl: process.env.GITHUB_APP_INSTALL_URL,
     privateKey: process.env.GITHUB_APP_PRIVATE_KEY?.replace(/\\n/g, "\n"),
     postComments: process.env.GITHUB_POST_COMMENTS !== "false"
   }
