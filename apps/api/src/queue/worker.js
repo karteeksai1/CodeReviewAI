@@ -35,6 +35,12 @@ const worker = new Worker(REVIEW_QUEUE_NAME, async (job) => {
     await updateReview(review?.id, { status: "completed", summary: agentResult.summary, riskScore: agentResult.risk_score, postedToGithub: posted, completedAt: new Date() });
     return { findings: findings.length, riskScore: agentResult.risk_score, posted };
   } catch (err) {
+    await upsertAgentRuns(review?.id, ["security", "performance", "style"].map((agent) => ({
+      agent,
+      status: "failed",
+      completedAt: new Date(),
+      error: err.message
+    })));
     await updateReview(review?.id, { status: "failed", error: err.message, completedAt: new Date() });
     throw err;
   }
