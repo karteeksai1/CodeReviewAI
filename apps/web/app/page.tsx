@@ -1,16 +1,25 @@
 "use client";
 
-import { Activity, GitPullRequest, RefreshCw, Search, ShieldCheck } from "lucide-react";
+import { Activity, GitPullRequest, LogOut, RefreshCw, Search, ShieldCheck } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { useAuth } from "../lib/auth";
 import { fetchHealth, fetchReviews, type Review } from "../lib/api";
 
 export default function Home() {
+  const router = useRouter();
+  const { user, token, loading: authLoading, logout } = useAuth();
   const [health, setHealth] = useState<"checking" | "ok" | "down">("checking");
   const [owner, setOwner] = useState("");
   const [repo, setRepo] = useState("");
   const [number, setNumber] = useState("");
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!authLoading && !user) router.replace("/login");
+  }, [authLoading, user, router]);
 
   useEffect(() => {
     fetchHealth().then(() => setHealth("ok")).catch(() => setHealth("down"));
@@ -27,13 +36,21 @@ export default function Home() {
   }, [reviews]);
 
   async function lookup() {
-    if (!owner || !repo || !number) return;
+    if (!owner || !repo || !number || !token) return;
     setLoading(true);
+    setError(null);
     try {
-      setReviews((await fetchReviews(owner, repo, number)).reviews);
+      setReviews((await fetchReviews(owner, repo, number, token)).reviews);
+    } catch (err) {
+      setReviews([]);
+      setError(err instanceof Error ? err.message : "Review lookup failed");
     } finally {
       setLoading(false);
     }
+  }
+
+  if (authLoading || !user) {
+    return <main className="login-shell"><p className="login-subtitle">Loading session...</p></main>;
   }
 
   return (
@@ -45,6 +62,12 @@ export default function Home() {
           <div className="nav-item"><Activity size={18} />Agents</div>
           <div className="nav-item"><RefreshCw size={18} />Queue</div>
         </nav>
+        <div className="sidebar-footer">
+          <div className="user-email">{user.email}</div>
+          <button className="logout-button" onClick={() => { logout(); router.replace("/login"); }}>
+            <LogOut size={16} />Sign out
+          </button>
+        </div>
       </aside>
       <section className="main">
         <div className="topbar">
@@ -70,13 +93,21 @@ export default function Home() {
               <input placeholder="owner" value={owner} onChange={(event) => setOwner(event.target.value)} />
               <input placeholder="repo" value={repo} onChange={(event) => setRepo(event.target.value)} />
               <input placeholder="PR #" value={number} onChange={(event) => setNumber(event.target.value)} />
-              <button onClick={lookup} disabled={loading} title="Search reviews"><Search size={16} />{loading ? "Loading" : "Search"}</button>
+              <button onClick={lookup} disabled={loading || !owner || !repo || !number} title="Search reviews">
+                <Search size={16} />{loading ? "Loading" : "Search"}
+              </button>
             </div>
           </div>
+          {error ? <p className="lookup-error">{error}</p> : null}
           <div className="table">
             <div className="row head"><div>Status</div><div>Summary</div><div>Risk</div><div>Findings</div></div>
             {reviews.length === 0 ? (
-              <div className="row"><div className="badge running">Ready</div><div>Search for a PR after a webhook has queued a review.</div><div>0</div><div>0</div></div>
+              <div className="row">
+                <div className="badge running">Ready</div>
+                <div>Search for a PR after a webhook has queued a review.</div>
+                <div>0</div>
+                <div>0</div>
+              </div>
             ) : reviews.map((review) => (
               <div className="row" key={review.id}>
                 <div className={badgeClass(review.status)}>{review.status}</div>

@@ -1,3 +1,4 @@
+import bcrypt from "bcryptjs";
 import pg from "pg";
 import { config } from "../config.js";
 import { logger } from "../logger.js";
@@ -77,7 +78,33 @@ export async function initDb() {
       metadata jsonb not null default '{}'::jsonb,
       created_at timestamptz not null default now()
     );
+    create table if not exists users (
+      id bigserial primary key,
+      email text not null unique,
+      password_hash text not null,
+      created_at timestamptz not null default now()
+    );
   `);
+
+  await seedDefaultAdmin();
+}
+
+async function seedDefaultAdmin() {
+  const existing = await query("select id from users limit 1");
+  if (existing.rows.length > 0) return;
+
+  const passwordHash = await bcrypt.hash(config.adminPassword, 10);
+  await query(
+    "insert into users (email, password_hash) values ($1, $2)",
+    [config.adminEmail.toLowerCase(), passwordHash]
+  );
+  logger.info({ email: config.adminEmail }, "Seeded default admin user");
+}
+
+export async function findUserByEmail(email) {
+  if (!pool) return null;
+  const result = await query("select id, email, password_hash from users where email = $1", [email]);
+  return result.rows[0] ?? null;
 }
 
 export async function upsertRepository(repo, installationId) {

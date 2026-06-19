@@ -6,6 +6,8 @@ export const config = {
   nodeEnv: process.env.NODE_ENV ?? "development",
   port: Number(process.env.API_PORT ?? process.env.PORT ?? 3000),
   jwtSecret: process.env.JWT_SECRET ?? "dev-secret",
+  adminEmail: process.env.ADMIN_EMAIL ?? "admin@codereviewai.local",
+  adminPassword: process.env.ADMIN_PASSWORD ?? "changeme",
   webhookSecret: process.env.GITHUB_WEBHOOK_SECRET ?? "",
   redisUrl: process.env.REDIS_URL ?? "redis://localhost:6379",
   databaseUrl: process.env.NEON_DATABASE_URL ?? process.env.DATABASE_URL,

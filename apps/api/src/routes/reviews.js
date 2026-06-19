@@ -1,7 +1,6 @@
 import express from "express";
-import jwt from "jsonwebtoken";
-import { config } from "../config.js";
 import { listReviewsByPr } from "../db/index.js";
+import { requireJwt } from "../middleware/auth.js";
 import { reviewQueue } from "../queue/index.js";
 
 export const reviewsRouter = express.Router();
@@ -17,7 +16,7 @@ reviewsRouter.get("/queue", requireJwt, async (_req, res) => {
   res.json({ waiting, active, delayed, failed, completed });
 });
 
-reviewsRouter.get("/pr", async (req, res, next) => {
+reviewsRouter.get("/pr", requireJwt, async (req, res, next) => {
   try {
     const { owner, repo, number } = req.query;
     if (!owner || !repo || !number) {
@@ -29,18 +28,3 @@ reviewsRouter.get("/pr", async (req, res, next) => {
     next(err);
   }
 });
-
-function requireJwt(req, res, next) {
-  const header = req.header("authorization");
-  const token = header?.startsWith("Bearer ") ? header.slice("Bearer ".length) : null;
-  if (!token) {
-    res.status(401).json({ error: "Missing bearer token" });
-    return;
-  }
-  try {
-    req.user = jwt.verify(token, config.jwtSecret);
-    next();
-  } catch {
-    res.status(401).json({ error: "Invalid bearer token" });
-  }
-}
