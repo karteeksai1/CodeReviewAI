@@ -14,7 +14,7 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
 
   if (!loading && user) {
-    router.replace("/");
+    router.replace("/dashboard");
     return null;
   }
 
@@ -24,7 +24,7 @@ export default function LoginPage() {
     setError(null);
     try {
       await login(email, password);
-      router.replace("/");
+      router.replace("/dashboard");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
     } finally {
