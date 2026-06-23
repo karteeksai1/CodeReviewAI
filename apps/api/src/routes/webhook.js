@@ -47,9 +47,11 @@ function shouldQueue(eventName, payload) {
   }
   if (eventName === "push") return Boolean(payload.repository?.full_name && payload.after);
   if (eventName === "pull_request_review") return payload.action === "submitted";
+  if (eventName === "issue_comment") {
+    return payload.action === "created" && payload.issue && payload.issue.pull_request;
+  }
   return false;
 }
-
 function verifySignature(req, ip) {
   if (!config.webhookSecret || config.webhookSecret === "replace-me") {
     if (config.nodeEnv !== "production") {
