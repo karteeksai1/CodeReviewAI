@@ -391,7 +391,7 @@ export default function LandingPage() {
             <p className="muted text-xs">Multi-agent async pull request reviewer.</p>
           </div>
           <div className="footer-links">
-            <a href="https://github.com/karteeksai/CodeReviewAI" className="footer-link">GitHub Repository</a>
+            <a href="https://github.com/karteeksai1/CodeReviewAI" className="footer-link">GitHub Repository</a>
             <a href="#how-it-works" className="footer-link">How it Works</a>
             <a href="#features" className="footer-link">Features</a>
             <a href="#hero" className="footer-link">Sign In</a>
