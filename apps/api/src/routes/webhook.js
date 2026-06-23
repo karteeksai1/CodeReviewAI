@@ -34,6 +34,12 @@ webhookRouter.post("/", express.raw({ type: "*/*", limit: "5mb" }), async (req, 
       res.status(202).json({ accepted: true, queued: false, deliveryId });
       return;
     }
+    const installationId = payload.installation?.id;
+    if (!installationId) {
+      logger.error({ deliveryId, eventName }, "Webhook payload missing installation.id");
+      res.status(400).json({ error: "Missing installation ID on payload" });
+      return;
+    }
     const job = await enqueueReview(eventName, payload);
     res.status(202).json({ accepted: true, queued: true, jobId: job.id, deliveryId });
   } catch (err) {
