@@ -28,6 +28,6 @@ export async function enqueueReview(eventName, payload) {
     payload.repository?.full_name,
     payload.pull_request?.number ?? payload.after ?? payload.review?.id,
     payload.pull_request?.head?.sha ?? payload.after ?? Date.now()
-  ].filter(Boolean).join(":");
+  ].filter(Boolean).join("-");
   return reviewQueue.add("review", { eventName, payload, enqueuedAt: new Date().toISOString() }, { jobId: dedupeId, priority });
 }

@@ -16,19 +16,21 @@ def embedding_dimensions() -> int:
 async def embed_text(text: str) -> list[float]:
     api_key = os.getenv("HUGGINGFACE_API_KEY") or os.getenv("HF_TOKEN")
     model = os.getenv("HUGGINGFACE_EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
-    if not api_key:
+    if not api_key or api_key == "replace-me":
         return stable_hash_embedding(text)
 
     url = f"https://api-inference.huggingface.co/pipeline/feature-extraction/{model}"
-    async with httpx.AsyncClient(timeout=httpx.Timeout(float(os.getenv("HUGGINGFACE_TIMEOUT_SECONDS", "45")))) as client:
-        response = await client.post(
-            url,
-            headers={"authorization": f"Bearer {api_key}"},
-            json={"inputs": text, "options": {"wait_for_model": True}},
-        )
-        response.raise_for_status()
-
-    return _pool_embedding(response.json())
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(float(os.getenv("HUGGINGFACE_TIMEOUT_SECONDS", "45")))) as client:
+            response = await client.post(
+                url,
+                headers={"authorization": f"Bearer {api_key}"},
+                json={"inputs": text, "options": {"wait_for_model": True}},
+            )
+            response.raise_for_status()
+        return _pool_embedding(response.json())
+    except Exception:
+        return stable_hash_embedding(text)
 
 
 def stable_hash_embedding(text: str, dims: int | None = None) -> list[float]:

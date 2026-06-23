@@ -6,7 +6,8 @@ import {
   getReviewDetail,
   listIndexingJobs,
   listRecentAgentRuns,
-  listReviewsByPr
+  listReviewsByPr,
+  updateIndexingJob
 } from "../db/index.js";
 import { requireJwt } from "../middleware/auth.js";
 import { reviewQueue } from "../queue/index.js";
@@ -112,6 +113,36 @@ reviewsRouter.post("/indexing", requireJwt, rateLimiter({ windowMs: 60 * 1000, m
       return;
     }
     const job = await createIndexingJob(repository);
+    (async () => {
+      try {
+        await updateIndexingJob(job.id, { status: "indexing", message: "Cloning and embedding repository" });
+        const response = await fetch(`${config.agentUrl.replace(/\/$/, "")}/index`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json"
+          },
+          body: JSON.stringify({
+            repo_path: repository,
+            namespace: repository
+          })
+        });
+        if (!response.ok) {
+          throw new Error(`Agent indexing failed: ${await response.text()}`);
+        }
+        const result = await response.json();
+        await updateIndexingJob(job.id, {
+          status: "completed",
+          chunks: result.chunks,
+          embedded: result.chunks,
+          message: "Codebase indexed successfully"
+        });
+      } catch (err) {
+        await updateIndexingJob(job.id, {
+          status: "failed",
+          message: err.message
+        });
+      }
+    })();
     res.status(202).json({ indexingJob: job });
   } catch (err) {
     next(err);

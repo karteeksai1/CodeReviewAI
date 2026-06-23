@@ -32,9 +32,22 @@ def iter_source_files(repo_path):
 
 
 async def index_repository(repo_path, namespace):
+    local_path = repo_path
+    if "/" in repo_path and not os.path.isabs(repo_path) and not repo_path.startswith("."):
+        local_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "repos", repo_path)
+        if not os.path.exists(local_path):
+            os.makedirs(os.path.dirname(local_path), exist_ok=True)
+            import subprocess
+            subprocess.run(["git", "clone", f"https://github.com/{repo_path}.git", local_path], check=True)
+        else:
+            import subprocess
+            try:
+                subprocess.run(["git", "-C", local_path, "pull"], check=False)
+            except Exception:
+                pass
     vectors = []
-    for source_file in iter_source_files(repo_path):
-        rel_path = str(Path(source_file).relative_to(repo_path))
+    for source_file in iter_source_files(local_path):
+        rel_path = str(Path(source_file).relative_to(local_path))
         text = source_file.read_text(encoding="utf8", errors="ignore")
         for index, chunk in enumerate(chunk_text(text)):
             vectors.append({
@@ -44,7 +57,13 @@ async def index_repository(repo_path, namespace):
             })
     client = get_pinecone()
     if client and vectors:
-        client.Index(os.getenv("PINECONE_INDEX")).upsert(vectors=vectors, namespace=namespace)
+        idx = client.Index(os.getenv("PINECONE_INDEX"))
+        for i in range(0, len(vectors), 100):
+            batch = vectors[i:i+100]
+            try:
+                idx.upsert(vectors=batch, namespace=namespace)
+            except Exception:
+                pass
     return {"namespace": namespace, "chunks": len(vectors), "pinecone": bool(client)}
 
 

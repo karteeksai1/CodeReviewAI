@@ -6,13 +6,30 @@ import { logger } from "../logger.js";
 
 export const webhookRouter = express.Router();
 
-webhookRouter.post("/", express.raw({ type: "application/json", limit: "5mb" }), async (req, res, next) => {
+webhookRouter.post("/", express.raw({ type: "*/*", limit: "5mb" }), async (req, res, next) => {
   const ip = req.ip || req.socket.remoteAddress;
   try {
     verifySignature(req, ip);
     const eventName = req.header("x-github-event");
     const deliveryId = req.header("x-github-delivery");
-    const payload = JSON.parse(req.body.toString("utf8"));
+    if (!req.body || req.body.length === 0) {
+      res.status(400).json({ error: "Empty request body" });
+      return;
+    }
+    const bodyStr = req.body.toString("utf8");
+    let payload;
+    const contentType = req.header("content-type") || "";
+    if (contentType.includes("application/x-www-form-urlencoded")) {
+      const params = new URLSearchParams(bodyStr);
+      const payloadStr = params.get("payload");
+      if (!payloadStr) {
+        res.status(400).json({ error: "Missing payload parameter" });
+        return;
+      }
+      payload = JSON.parse(payloadStr);
+    } else {
+      payload = JSON.parse(bodyStr);
+    }
     if (!shouldQueue(eventName, payload)) {
       res.status(202).json({ accepted: true, queued: false, deliveryId });
       return;
@@ -34,9 +51,9 @@ function shouldQueue(eventName, payload) {
 }
 
 function verifySignature(req, ip) {
-  if (!config.webhookSecret) {
+  if (!config.webhookSecret || config.webhookSecret === "replace-me") {
     if (config.nodeEnv !== "production") {
-      logger.warn({ ip }, "Skipping signature verification in non-production because GITHUB_WEBHOOK_SECRET is not set");
+      logger.warn({ ip }, "Skipping signature verification in non-production because GITHUB_WEBHOOK_SECRET is not set or is replace-me");
       return;
     }
     const err = new Error("GITHUB_WEBHOOK_SECRET is required in production");

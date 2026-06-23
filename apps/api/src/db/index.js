@@ -290,6 +290,22 @@ export async function listIndexingJobs(limit = 10) {
   return result.rows;
 }
 
+export async function updateIndexingJob(id, fields) {
+  if (!pool) return null;
+  const keys = Object.keys(fields);
+  const values = Object.values(fields);
+  if (keys.length === 0) return null;
+  const setClause = keys.map((key, i) => `${key} = $${i + 2}`).join(", ");
+  const result = await query(
+    `update indexing_jobs
+     set ${setClause}, updated_at = now()
+     where id = $1
+     returning *`,
+    [id, ...values]
+  );
+  return result.rows[0];
+}
+
 export async function listReviewsByPr({ owner, repo, number }) {
   if (!pool) return [];
   const prNumber = Number(number);
