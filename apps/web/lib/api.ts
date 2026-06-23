@@ -1,6 +1,7 @@
 export type AuthUser = {
   id: number;
   email: string;
+  isAdmin?: boolean;
 };
 
 export type Review = {
@@ -42,6 +43,7 @@ export type AgentRun = {
   number?: number;
   title?: string;
   updated_at?: string;
+  error?: string | null;
 };
 
 export type QueueState = {
@@ -64,9 +66,13 @@ export type QueueState = {
 
 export type DashboardStats = {
   reviews: number;
+  reviewsDelta?: number;
   findings: number;
+  findingsDelta?: number;
   high: number;
+  highDelta?: number;
   latestRisk: string | number;
+  previousRisk?: number;
 };
 
 export type ConnectState = {
@@ -193,5 +199,14 @@ export async function requestIndexing(repository: string, token: string) {
     body: JSON.stringify({ repository })
   });
   if (!response.ok) throw new Error(await parseError(response, "Indexing request failed"));
+  return response.json();
+}
+
+export async function retryJob(id: string, token: string) {
+  const response = await fetch(`${API_URL}/reviews/queue/jobs/${id}/retry`, {
+    method: "POST",
+    headers: authHeaders(token)
+  });
+  if (!response.ok) throw new Error(await parseError(response, "Retry job failed"));
   return response.json();
 }

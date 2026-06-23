@@ -35,6 +35,7 @@ HUGGINGFACE_EMBEDDING_MODEL="sentence-transformers/all-MiniLM-L6-v2"
 EMBEDDING_DIMENSIONS=384
 PINECONE_API_KEY="..."
 PINECONE_INDEX="codereviewai"
+GITHUB_APP_INSTALL_URL="https://github.com/apps/your-app-name/installations/new"
 ```
 
 Create the Pinecone index with the same dimension as the Hugging Face model output. The default `sentence-transformers/all-MiniLM-L6-v2` model uses `384` dimensions.

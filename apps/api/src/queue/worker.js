@@ -1,4 +1,5 @@
 import { Worker } from "bullmq";
+import crypto from "crypto";
 import { config } from "../config.js";
 import { createReview, initDb, insertFindings, updateReview, upsertAgentRuns, upsertPullRequest, upsertRepository } from "../db/index.js";
 import { logger } from "../logger.js";
@@ -25,9 +26,10 @@ const worker = new Worker(REVIEW_QUEUE_NAME, async (job) => {
     startedAt: new Date()
   })));
 
+  const requestId = crypto.randomUUID();
   try {
     const context = await fetchPullRequestContext({ owner, repo, pullNumber: pullRequest.number, installationId });
-    const agentResult = await requestAgentReview(context);
+    const agentResult = await requestAgentReview(context, requestId);
     const findings = agentResult.findings ?? [];
     await insertFindings(review?.id, findings);
     await upsertAgentRuns(review?.id, agentResult.agent_runs ?? []);

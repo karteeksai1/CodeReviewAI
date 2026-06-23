@@ -219,13 +219,17 @@ export async function upsertAgentRuns(reviewId, runs = []) {
 }
 
 export async function getDashboardStats() {
-  if (!pool) return { reviews: 0, findings: 0, high: 0, latestRisk: 0 };
+  if (!pool) return { reviews: 0, findings: 0, high: 0, latestRisk: 0, reviewsDelta: 0, findingsDelta: 0, highDelta: 0, previousRisk: 0 };
   const result = await query(`
     select
       (select count(*)::int from reviews) as reviews,
+      (select count(*)::int from reviews where created_at > now() - interval '24 hours') as "reviewsDelta",
       (select count(*)::int from findings) as findings,
+      (select count(*)::int from findings where created_at > now() - interval '24 hours') as "findingsDelta",
       (select count(*)::int from findings where severity in ('critical', 'high')) as high,
-      coalesce((select risk_score from reviews where risk_score is not null order by created_at desc limit 1), 0) as "latestRisk"
+      (select count(*)::int from findings where severity in ('critical', 'high') and created_at > now() - interval '24 hours') as "highDelta",
+      coalesce((select risk_score::float from reviews where risk_score is not null order by created_at desc limit 1), 0) as "latestRisk",
+      coalesce((select risk_score::float from reviews where risk_score is not null order by created_at desc limit 1 offset 1), 0) as "previousRisk"
   `);
   return result.rows[0];
 }

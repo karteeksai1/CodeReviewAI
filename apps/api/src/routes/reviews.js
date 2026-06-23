@@ -13,6 +13,25 @@ import { reviewQueue } from "../queue/index.js";
 
 export const reviewsRouter = express.Router();
 
+const rateLimitMap = new Map();
+function rateLimiter({ windowMs, max }) {
+  return (req, res, next) => {
+    const ip = req.ip || req.socket.remoteAddress;
+    const now = Date.now();
+    if (!rateLimitMap.has(ip)) {
+      rateLimitMap.set(ip, []);
+    }
+    const timestamps = rateLimitMap.get(ip).filter((t) => now - t < windowMs);
+    if (timestamps.length >= max) {
+      res.status(429).json({ error: "Too many requests, please try again later." });
+      return;
+    }
+    timestamps.push(now);
+    rateLimitMap.set(ip, timestamps);
+    next();
+  };
+}
+
 reviewsRouter.get("/queue", requireJwt, async (_req, res) => {
   const [waiting, active, delayed, failed, completed] = await Promise.all([
     reviewQueue.getWaitingCount(),
@@ -43,6 +62,20 @@ reviewsRouter.get("/queue", requireJwt, async (_req, res) => {
   });
 });
 
+reviewsRouter.post("/queue/jobs/:id/retry", requireJwt, async (req, res, next) => {
+  try {
+    const job = await reviewQueue.getJob(req.params.id);
+    if (!job) {
+      res.status(404).json({ error: "Job not found" });
+      return;
+    }
+    await job.retry();
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
 reviewsRouter.get("/stats", requireJwt, async (_req, res, next) => {
   try {
     res.json(await getDashboardStats());
@@ -71,7 +104,7 @@ reviewsRouter.get("/connect", requireJwt, async (_req, res, next) => {
   }
 });
 
-reviewsRouter.post("/indexing", requireJwt, async (req, res, next) => {
+reviewsRouter.post("/indexing", requireJwt, rateLimiter({ windowMs: 60 * 1000, max: 10 }), async (req, res, next) => {
   try {
     const repository = String(req.body?.repository ?? "").trim();
     if (!/^[\w.-]+\/[\w.-]+$/.test(repository)) {
@@ -85,18 +118,18 @@ reviewsRouter.post("/indexing", requireJwt, async (req, res, next) => {
   }
 });
 
-reviewsRouter.get("/pr", requireJwt, async (req, res, next) => {
+reviewsRouter.get("/pr", requireJwt, rateLimiter({ windowMs: 60 * 1000, max: 30 }), async (req, res, next) => {
   try {
     const { owner, repo, number } = req.query;
     if (!owner || !repo || !number) {
       res.status(400).json({ error: "owner, repo, and number are required" });
       return;
     }
-    if (!/^\d+$/.test(String(number))) {
-      res.status(400).json({ error: "PR number must be numeric." });
+    if (!/^[1-9]\d*$/.test(String(number))) {
+      res.status(400).json({ error: "PR number must be a positive integer without leading zeros." });
       return;
     }
-    res.json({ reviews: await listReviewsByPr({ owner, repo, number }) });
+    res.json({ reviews: await listReviewsByPr({ owner, repo, number: parseInt(String(number), 10) }) });
   } catch (err) {
     next(err);
   }

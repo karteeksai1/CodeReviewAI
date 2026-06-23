@@ -1,11 +1,14 @@
+import contextvars
 import json
 import os
 from typing import Any
 
 import httpx
 
-
 GROQ_CHAT_URL = "https://api.groq.com/openai/v1/chat/completions"
+
+request_id_var = contextvars.ContextVar("request_id", default="")
+token_usage_var = contextvars.ContextVar("token_usage", default=0)
 
 
 def groq_enabled() -> bool:
@@ -34,7 +37,11 @@ async def groq_json(system: str, user: str, *, temperature: float = 0.1) -> dict
             json=payload,
         )
         response.raise_for_status()
-    content = response.json()["choices"][0]["message"]["content"]
+    res_data = response.json()
+    usage = res_data.get("usage", {})
+    tokens = usage.get("total_tokens", 0)
+    token_usage_var.set(token_usage_var.get() + tokens)
+    content = res_data["choices"][0]["message"]["content"]
     try:
         return json.loads(content)
     except json.JSONDecodeError:

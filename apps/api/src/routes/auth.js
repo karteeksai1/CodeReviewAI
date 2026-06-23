@@ -2,6 +2,7 @@ import bcrypt from "bcryptjs";
 import express from "express";
 import { findUserByEmail } from "../db/index.js";
 import { requireJwt, signUserToken } from "../middleware/auth.js";
+import { config } from "../config.js";
 
 export const authRouter = express.Router();
 
@@ -27,7 +28,11 @@ authRouter.post("/login", async (req, res, next) => {
 
     res.json({
       token: signUserToken(user),
-      user: { id: user.id, email: user.email }
+      user: {
+        id: user.id,
+        email: user.email,
+        isAdmin: user.email.toLowerCase() === config.adminEmail.toLowerCase()
+      }
     });
   } catch (err) {
     next(err);
@@ -35,5 +40,11 @@ authRouter.post("/login", async (req, res, next) => {
 });
 
 authRouter.get("/me", requireJwt, (req, res) => {
-  res.json({ user: { id: req.user.sub, email: req.user.email } });
+  res.json({
+    user: {
+      id: req.user.sub,
+      email: req.user.email,
+      isAdmin: req.user.email.toLowerCase() === config.adminEmail.toLowerCase()
+    }
+  });
 });

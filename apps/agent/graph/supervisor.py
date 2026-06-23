@@ -1,7 +1,10 @@
 import asyncio
+import time
 from datetime import datetime, timezone
 from time import perf_counter
 from typing import Any
+
+import structlog
 
 from graph.agents.performance import performance_agent
 from graph.agents.security import security_agent
@@ -9,15 +12,20 @@ from graph.agents.style import style_agent
 from graph.nodes.aggregator import aggregate_findings
 from graph.nodes.github_poster import prepare_github_post
 from graph.state import GraphState
-from llm.groq import groq_json
+from llm.groq import groq_json, request_id_var, token_usage_var
 
 try:
     from langgraph.graph import END, START, StateGraph
 except Exception:
     END = START = StateGraph = None
 
+logger = structlog.get_logger()
+
 
 async def supervisor_node(state: GraphState) -> GraphState:
+    req_id = request_id_var.get()
+    start_time = time.perf_counter()
+    tokens_before = token_usage_var.get()
     system = (
         "You are a routing supervisor for CodeReviewAI. Analyze the provided PR diff and file paths. "
         "Decide which review agents need to run. Options are: 'security', 'performance', 'style'. "
@@ -25,34 +33,116 @@ async def supervisor_node(state: GraphState) -> GraphState:
         "Always include 'style'."
     )
     user = f"Diff:\n{state.get('diff', '')}"
-    
     try:
         result = await groq_json(system, user)
         plan = result.get("agent_plan", ["security", "performance", "style"])
     except Exception:
         plan = ["security", "performance", "style"]
-        
+    duration = int((time.perf_counter() - start_time) * 1000)
+    tokens_used = token_usage_var.get() - tokens_before
+    logger.info(
+        "Agent completed",
+        agent="supervisor",
+        request_id=req_id,
+        latency_ms=duration,
+        token_usage=tokens_used,
+        plan=plan
+    )
     return {"agent_plan": plan}
 
 
 async def security_node(state: GraphState) -> GraphState:
-    return {"findings": await security_agent(state)} if "security" in state.get("agent_plan", []) else {"findings": []}
+    req_id = request_id_var.get()
+    start_time = time.perf_counter()
+    tokens_before = token_usage_var.get()
+    findings = []
+    if "security" in state.get("agent_plan", []):
+        findings = await security_agent(state)
+    duration = int((time.perf_counter() - start_time) * 1000)
+    tokens_used = token_usage_var.get() - tokens_before
+    logger.info(
+        "Agent completed",
+        agent="security",
+        request_id=req_id,
+        latency_ms=duration,
+        token_usage=tokens_used,
+        findings_count=len(findings)
+    )
+    return {"findings": findings}
 
 
 async def performance_node(state: GraphState) -> GraphState:
-    return {"findings": await performance_agent(state)} if "performance" in state.get("agent_plan", []) else {"findings": []}
+    req_id = request_id_var.get()
+    start_time = time.perf_counter()
+    tokens_before = token_usage_var.get()
+    findings = []
+    if "performance" in state.get("agent_plan", []):
+        findings = await performance_agent(state)
+    duration = int((time.perf_counter() - start_time) * 1000)
+    tokens_used = token_usage_var.get() - tokens_before
+    logger.info(
+        "Agent completed",
+        agent="performance",
+        request_id=req_id,
+        latency_ms=duration,
+        token_usage=tokens_used,
+        findings_count=len(findings)
+    )
+    return {"findings": findings}
 
 
 async def style_node(state: GraphState) -> GraphState:
-    return {"findings": await style_agent(state)} if "style" in state.get("agent_plan", []) else {"findings": []}
+    req_id = request_id_var.get()
+    start_time = time.perf_counter()
+    tokens_before = token_usage_var.get()
+    findings = []
+    if "style" in state.get("agent_plan", []):
+        findings = await style_agent(state)
+    duration = int((time.perf_counter() - start_time) * 1000)
+    tokens_used = token_usage_var.get() - tokens_before
+    logger.info(
+        "Agent completed",
+        agent="style",
+        request_id=req_id,
+        latency_ms=duration,
+        token_usage=tokens_used,
+        findings_count=len(findings)
+    )
+    return {"findings": findings}
 
 
 async def aggregator_node(state: GraphState) -> GraphState:
-    return aggregate_findings(state)
+    req_id = request_id_var.get()
+    start_time = time.perf_counter()
+    tokens_before = token_usage_var.get()
+    result = aggregate_findings(state)
+    duration = int((time.perf_counter() - start_time) * 1000)
+    tokens_used = token_usage_var.get() - tokens_before
+    logger.info(
+        "Agent completed",
+        agent="aggregator",
+        request_id=req_id,
+        latency_ms=duration,
+        token_usage=tokens_used
+    )
+    return result
 
 
 async def github_poster_node(state: GraphState) -> GraphState:
-    return await prepare_github_post(state)
+    req_id = request_id_var.get()
+    start_time = time.perf_counter()
+    tokens_before = token_usage_var.get()
+    result = await prepare_github_post(state)
+    duration = int((time.perf_counter() - start_time) * 1000)
+    tokens_used = token_usage_var.get() - tokens_before
+    logger.info(
+        "Agent completed",
+        agent="github_poster",
+        request_id=req_id,
+        latency_ms=duration,
+        token_usage=tokens_used
+    )
+    return result
 
 
 def build_graph():
