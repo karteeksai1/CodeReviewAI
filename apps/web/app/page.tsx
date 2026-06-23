@@ -394,7 +394,7 @@ export default function LandingPage() {
             <a href="https://github.com/karteeksai/CodeReviewAI" className="footer-link">GitHub Repository</a>
             <a href="#how-it-works" className="footer-link">How it Works</a>
             <a href="#features" className="footer-link">Features</a>
-            <a href="/login" className="footer-link">Sign In</a>
+            <a href="#hero" className="footer-link">Sign In</a>
           </div>
           <div className="footer-copy">
             &copy; 2026 CodeReviewAI. All rights reserved.

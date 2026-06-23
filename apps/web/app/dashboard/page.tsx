@@ -67,7 +67,7 @@ export default function Home() {
   const canSearch = Boolean(owner.trim() && repo.trim() && prNumberValid && token && !loading);
 
   useEffect(() => {
-    if (!authLoading && !user) router.replace("/login");
+    if (!authLoading && !user) router.replace("/");
   }, [authLoading, user, router]);
 
   useEffect(() => {
@@ -221,7 +221,7 @@ export default function Home() {
             {user.email}
             {user.isAdmin && <span className="admin-tag">Admin</span>}
           </div>
-          <button className="logout-button" onClick={() => { logout(); router.replace("/login"); }}>
+          <button className="logout-button" onClick={() => { logout(); router.replace("/"); }}>
             <LogOut size={16} />Sign out
           </button>
         </div>
