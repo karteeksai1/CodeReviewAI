@@ -65,9 +65,9 @@ export default function LandingPage() {
     <div className="landing-root">
       <header className="landing-header">
         <div className="brand"><ShieldCheck size={20} />CodeReviewAI</div>
-        <button className="signin-link" onClick={handleDashboardRedirect}>
+        <a className="signin-link" href="#hero">
           Sign in to Dashboard →
-        </button>
+        </a>
       </header>
 
       <section className="landing-hero" id="hero">
