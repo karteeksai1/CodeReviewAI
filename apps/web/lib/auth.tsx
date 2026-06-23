@@ -1,13 +1,15 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { login as apiLogin, fetchMe, type AuthUser } from "./api";
+import { login as apiLogin, signup as apiSignup, loginWithGoogleMock as apiLoginWithGoogleMock, fetchMe, type AuthUser } from "./api";
 
 type AuthContextValue = {
   user: AuthUser | null;
   token: string | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
+  signup: (email: string, password: string) => Promise<void>;
+  loginWithGoogle: () => Promise<void>;
   logout: () => void;
 };
 
@@ -44,6 +46,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(result.user);
   }, []);
 
+  const signup = useCallback(async (email: string, password: string) => {
+    const result = await apiSignup(email, password);
+    window.localStorage.setItem(TOKEN_KEY, result.token);
+    setToken(result.token);
+    setUser(result.user);
+  }, []);
+
+  const loginWithGoogle = useCallback(async () => {
+    const result = await apiLoginWithGoogleMock();
+    window.localStorage.setItem(TOKEN_KEY, result.token);
+    setToken(result.token);
+    setUser(result.user);
+  }, []);
+
   const logout = useCallback(() => {
     window.localStorage.removeItem(TOKEN_KEY);
     setToken(null);
@@ -51,9 +67,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ user, token, loading, login, logout }),
-    [user, token, loading, login, logout]
+    () => ({ user, token, loading, login, signup, loginWithGoogle, logout }),
+    [user, token, loading, login, signup, loginWithGoogle, logout]
   );
+
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

@@ -126,6 +126,26 @@ export async function login(email: string, password: string) {
   return (await response.json()) as { token: string; user: AuthUser };
 }
 
+export async function signup(email: string, password: string) {
+  const response = await fetch(`${API_URL}/auth/signup`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email, password })
+  });
+  if (!response.ok) throw new Error(await parseError(response, "Signup failed"));
+  return (await response.json()) as { token: string; user: AuthUser };
+}
+
+export async function loginWithGoogleMock() {
+  const response = await fetch(`${API_URL}/auth/google-mock`, {
+    method: "POST",
+    headers: { "content-type": "application/json" }
+  });
+  if (!response.ok) throw new Error(await parseError(response, "Google login failed"));
+  return (await response.json()) as { token: string; user: AuthUser };
+}
+
+
 export async function fetchMe(token: string) {
   const response = await fetch(`${API_URL}/auth/me`, {
     cache: "no-store",
