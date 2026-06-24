@@ -95,8 +95,9 @@ export default function Home() {
 
   useEffect(() => {
     let mounted = true;
+    let isFirstCheck = true;
     async function checkHealth() {
-      setIsCheckingHealth(true);
+      if (isFirstCheck) setIsCheckingHealth(true);
       try {
         const data = await fetchHealth();
         if (!mounted) return;
@@ -107,6 +108,7 @@ export default function Home() {
           setHealthStatus("down");
         }
       } finally {
+        isFirstCheck = false;
         if (mounted) setIsCheckingHealth(false);
       }
     }
