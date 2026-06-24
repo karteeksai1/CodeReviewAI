@@ -240,9 +240,10 @@ a { color: inherit; }
   position: absolute;
   top: 0;
   left: 0;
-  width: 100%;
+  width: 200%;
   height: 100%;
   object-fit: cover;
+  object-position: left center;
   opacity: 0.75;
   z-index: 1;
   pointer-events: none;
@@ -873,6 +874,10 @@ a { color: inherit; }
   .hero-visual {
     min-height: 480px;
     padding: 40px;
+  }
+  .hero-image {
+    width: 100%;
+    object-position: left center;
   }
   .hero-logo-mark {
     top: 20px;
