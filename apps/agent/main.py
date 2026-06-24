@@ -101,6 +101,19 @@ async def health():
     }
 
 
+@app.post("/warmup")
+async def warmup():
+    import asyncio
+    from llm.groq import groq_json
+    async def _do_warmup():
+        try:
+            await groq_json("Ping", "Ping")
+        except Exception:
+            pass
+    asyncio.create_task(_do_warmup())
+    return {"ok": True}
+
+
 @app.post("/review")
 async def review(request: ReviewRequest, req: Request):
     req_id = req.headers.get("x-request-id", "unknown-request-id")

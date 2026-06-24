@@ -110,7 +110,15 @@ export async function initDb() {
     );
   `);
 
+  await query(`
+    alter table repositories add column if not exists user_id bigint references users(id);
+    alter table indexing_jobs add column if not exists user_id bigint references users(id);
+  `);
+
   await seedDefaultAdmin();
+
+  await query("update repositories set user_id = (select id from users limit 1) where user_id is null;");
+  await query("update indexing_jobs set user_id = (select id from users limit 1) where user_id is null;");
 }
 
 async function seedDefaultAdmin() {
@@ -131,15 +139,15 @@ export async function findUserByEmail(email) {
   return result.rows[0] ?? null;
 }
 
-export async function upsertRepository(repo, installationId) {
+export async function upsertRepository(repo, installationId, userId = null) {
   if (!pool) return null;
   const [owner, name] = repo.full_name.split("/");
   const result = await query(
-    `insert into repositories (github_id, owner, name, full_name, installation_id, default_branch, updated_at)
-     values ($1,$2,$3,$4,$5,$6,now())
-     on conflict (full_name) do update set installation_id = excluded.installation_id, updated_at = now()
+    `insert into repositories (github_id, owner, name, full_name, installation_id, default_branch, updated_at, user_id)
+     values ($1,$2,$3,$4,$5,$6,now(),$7)
+     on conflict (full_name) do update set installation_id = excluded.installation_id, user_id = coalesce(excluded.user_id, repositories.user_id), updated_at = now()
      returning *`,
-    [repo.id, owner, name, repo.full_name, installationId, repo.default_branch]
+    [repo.id, owner, name, repo.full_name, installationId, repo.default_branch, userId]
   );
   return result.rows[0];
 }
@@ -218,36 +226,50 @@ export async function upsertAgentRuns(reviewId, runs = []) {
   return rows;
 }
 
-export async function getDashboardStats() {
+export async function getDashboardStats(userId) {
   if (!pool) return { reviews: 0, findings: 0, high: 0, latestRisk: 0, reviewsDelta: 0, findingsDelta: 0, highDelta: 0, previousRisk: 0, reviewsHistory: [], findingsHistory: [], highHistory: [], riskHistory: [] };
   const result = await query(`
+    with user_revs as (
+      select rev.id, rev.risk_score, rev.created_at
+      from reviews rev
+      join pull_requests pr on pr.id = rev.pull_request_id
+      join repositories r on r.id = pr.repository_id
+      where r.user_id = $1
+    ), user_findings as (
+      select f.id, f.severity, f.created_at
+      from findings f
+      join reviews rev on rev.id = f.review_id
+      join pull_requests pr on pr.id = rev.pull_request_id
+      join repositories r on r.id = pr.repository_id
+      where r.user_id = $1
+    )
     select
-      (select count(*)::int from reviews) as reviews,
-      (select count(*)::int from reviews where created_at > now() - interval '24 hours') as "reviewsDelta",
-      (select count(*)::int from findings) as findings,
-      (select count(*)::int from findings where created_at > now() - interval '24 hours') as "findingsDelta",
-      (select count(*)::int from findings where severity in ('critical', 'high')) as high,
-      (select count(*)::int from findings where severity in ('critical', 'high') and created_at > now() - interval '24 hours') as "highDelta",
-      coalesce((select risk_score::float from reviews where risk_score is not null order by created_at desc limit 1), 0) as "latestRisk",
-      coalesce((select risk_score::float from reviews where risk_score is not null order by created_at desc limit 1 offset 1), 0) as "previousRisk",
+      (select count(*)::int from user_revs) as reviews,
+      (select count(*)::int from user_revs where created_at > now() - interval '24 hours') as "reviewsDelta",
+      (select count(*)::int from user_findings) as findings,
+      (select count(*)::int from user_findings where created_at > now() - interval '24 hours') as "findingsDelta",
+      (select count(*)::int from user_findings where severity in ('critical', 'high')) as high,
+      (select count(*)::int from user_findings where severity in ('critical', 'high') and created_at > now() - interval '24 hours') as "highDelta",
+      coalesce((select risk_score::float from user_revs where risk_score is not null order by created_at desc limit 1), 0) as "latestRisk",
+      coalesce((select risk_score::float from user_revs where risk_score is not null order by created_at desc limit 1 offset 1), 0) as "previousRisk",
       (select array(
-        select coalesce(count(r.id)::int, 0)
+        select coalesce(count(ur.id)::int, 0)
         from generate_series(now() - interval '6 days', now(), '1 day') as d
-        left join reviews r on r.created_at::date = d::date
+        left join user_revs ur on ur.created_at::date = d::date
         group by d::date
         order by d::date
       )) as "reviewsHistory",
       (select array(
-        select coalesce(count(f.id)::int, 0)
+        select coalesce(count(uf.id)::int, 0)
         from generate_series(now() - interval '6 days', now(), '1 day') as d
-        left join findings f on f.created_at::date = d::date
+        left join user_findings uf on uf.created_at::date = d::date
         group by d::date
         order by d::date
       )) as "findingsHistory",
       (select array(
-        select coalesce(count(f.id)::int, 0)
+        select coalesce(count(uf.id)::int, 0)
         from generate_series(now() - interval '6 days', now(), '1 day') as d
-        left join findings f on f.created_at::date = d::date and f.severity in ('critical', 'high')
+        left join user_findings uf on uf.created_at::date = d::date and uf.severity in ('critical', 'high')
         group by d::date
         order by d::date
       )) as "highHistory",
@@ -255,18 +277,80 @@ export async function getDashboardStats() {
         select coalesce(risk_score::float, 0)
         from (
           select risk_score, created_at
-          from reviews
+          from user_revs
           where risk_score is not null
           order by created_at desc
           limit 7
         ) sub
         order by created_at asc
       )) as "riskHistory"
-  `);
+  `, [userId]);
   return result.rows[0];
 }
 
-export async function listRecentAgentRuns(limit = 20) {
+export async function getRepoStats(userId, repoFullName) {
+  if (!pool) return { reviews: 0, findings: 0, high: 0, latestRisk: 0, reviewsDelta: 0, findingsDelta: 0, highDelta: 0, previousRisk: 0, reviewsHistory: [], findingsHistory: [], highHistory: [], riskHistory: [] };
+  const result = await query(`
+    with user_revs as (
+      select rev.id, rev.risk_score, rev.created_at
+      from reviews rev
+      join pull_requests pr on pr.id = rev.pull_request_id
+      join repositories r on r.id = pr.repository_id
+      where r.user_id = $1 and r.full_name = $2
+    ), user_findings as (
+      select f.id, f.severity, f.created_at
+      from findings f
+      join reviews rev on rev.id = f.review_id
+      join pull_requests pr on pr.id = rev.pull_request_id
+      join repositories r on r.id = pr.repository_id
+      where r.user_id = $1 and r.full_name = $2
+    )
+    select
+      (select count(*)::int from user_revs) as reviews,
+      (select count(*)::int from user_revs where created_at > now() - interval '24 hours') as "reviewsDelta",
+      (select count(*)::int from user_findings) as findings,
+      (select count(*)::int from user_findings where created_at > now() - interval '24 hours') as "findingsDelta",
+      (select count(*)::int from user_findings where severity in ('critical', 'high')) as high,
+      (select count(*)::int from user_findings where severity in ('critical', 'high') and created_at > now() - interval '24 hours') as "highDelta",
+      coalesce((select risk_score::float from user_revs where risk_score is not null order by created_at desc limit 1), 0) as "latestRisk",
+      coalesce((select risk_score::float from user_revs where risk_score is not null order by created_at desc limit 1 offset 1), 0) as "previousRisk",
+      (select array(
+        select coalesce(count(ur.id)::int, 0)
+        from generate_series(now() - interval '6 days', now(), '1 day') as d
+        left join user_revs ur on ur.created_at::date = d::date
+        group by d::date
+        order by d::date
+      )) as "reviewsHistory",
+      (select array(
+        select coalesce(count(uf.id)::int, 0)
+        from generate_series(now() - interval '6 days', now(), '1 day') as d
+        left join user_findings uf on uf.created_at::date = d::date
+        group by d::date
+        order by d::date
+      )) as "findingsHistory",
+      (select array(
+        select coalesce(count(uf.id)::int, 0)
+        from generate_series(now() - interval '6 days', now(), '1 day') as d
+        left join user_findings uf on uf.created_at::date = d::date and uf.severity in ('critical', 'high')
+        group by d::date
+        order by d::date
+      )) as "highHistory",
+      (select array(
+        select coalesce(risk_score::float, 0)
+        from (
+          select risk_score, created_at
+          from user_revs
+          where risk_score is not null
+          order by created_at desc
+          limit 7
+        ) sub
+        order by created_at asc
+      )) as "riskHistory"
+  `, [userId, repoFullName]);
+  return result.rows[0];
+}
+
+export async function listRecentAgentRuns(userId, limit = 20) {
   if (!pool) return [];
   const result = await query(
     `select ar.*, r.status as review_status, pr.number, pr.title, repositories.full_name
@@ -274,14 +358,15 @@ export async function listRecentAgentRuns(limit = 20) {
      join reviews r on r.id = ar.review_id
      join pull_requests pr on pr.id = r.pull_request_id
      join repositories on repositories.id = pr.repository_id
+     where repositories.user_id = $1
      order by ar.updated_at desc
-     limit $1`,
-    [limit]
+     limit $2`,
+    [userId, limit]
   );
   return result.rows;
 }
 
-export async function getReviewDetail(reviewId) {
+export async function getReviewDetail(userId, reviewId) {
   if (!pool) return null;
   const result = await query(
     `select
@@ -298,27 +383,27 @@ export async function getReviewDetail(reviewId) {
      join repositories on repositories.id = pr.repository_id
      left join findings f on f.review_id = r.id
      left join agent_runs ar on ar.review_id = r.id
-     where r.id = $1
+     where r.id = $2 and repositories.user_id = $1
      group by r.id, pr.number, pr.title, pr.head_sha, pr.base_sha, repositories.full_name`,
-    [Number(reviewId)]
+    [userId, Number(reviewId)]
   );
   return result.rows[0] ?? null;
 }
 
-export async function createIndexingJob(repositoryFullName) {
+export async function createIndexingJob(repositoryFullName, userId) {
   if (!pool) return null;
   const result = await query(
-    `insert into indexing_jobs (repository_full_name, status, message)
-     values ($1, 'queued', 'Repository indexing request created')
+    `insert into indexing_jobs (repository_full_name, status, message, user_id)
+     values ($1, 'queued', 'Repository indexing request created', $2)
      returning *`,
-    [repositoryFullName]
+    [repositoryFullName, userId]
   );
   return result.rows[0];
 }
 
-export async function listIndexingJobs(limit = 10) {
+export async function listIndexingJobs(userId, limit = 10) {
   if (!pool) return [];
-  const result = await query("select * from indexing_jobs order by created_at desc limit $1", [limit]);
+  const result = await query("select * from indexing_jobs where user_id = $1 order by created_at desc limit $2", [userId, limit]);
   return result.rows;
 }
 
@@ -338,7 +423,7 @@ export async function updateIndexingJob(id, fields) {
   return result.rows[0];
 }
 
-export async function listReviewsByPr({ owner, repo, number }) {
+export async function listReviewsByPr({ userId, owner, repo, number }) {
   if (!pool) return [];
   const prNumber = Number(number);
   if (!Number.isInteger(prNumber) || prNumber < 1) {
@@ -353,10 +438,10 @@ export async function listReviewsByPr({ owner, repo, number }) {
      join pull_requests pr on pr.id = r.pull_request_id
      join repositories on repositories.id = pr.repository_id
      left join findings f on f.review_id = r.id
-     where repositories.owner = $1 and repositories.name = $2 and pr.number = $3
+     where repositories.user_id = $1 and repositories.owner = $2 and repositories.name = $3 and pr.number = $4
      group by r.id, pr.number, pr.title, repositories.full_name
      order by r.created_at desc`,
-    [owner, repo, prNumber]
+    [userId, owner, repo, prNumber]
   );
   return result.rows;
 }

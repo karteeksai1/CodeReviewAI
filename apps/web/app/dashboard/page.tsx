@@ -21,6 +21,7 @@ import {
   fetchReviewDetail,
   fetchReviews,
   fetchStats,
+  fetchRepoStats,
   requestIndexing,
   retryJob,
   deleteJob,
@@ -44,6 +45,7 @@ export default function Home() {
   const { user, token, loading: authLoading, logout } = useAuth();
   const [activeTab, setActiveTab] = useState<Tab>("reviews");
   const [healthStatus, setHealthStatus] = useState<"checking" | "ok" | "down">("checking");
+  const [isCheckingHealth, setIsCheckingHealth] = useState(true);
   const [healthDetails, setHealthDetails] = useState<{
     postgres: boolean;
     redis: boolean;
@@ -57,6 +59,7 @@ export default function Home() {
   const [reviews, setReviews] = useState<Review[]>([]);
   const [selectedReview, setSelectedReview] = useState<Review | null>(null);
   const [stats, setStats] = useState<DashboardStats>(emptyStats);
+  const [repoStats, setRepoStats] = useState<DashboardStats | null>(null);
   const [queue, setQueue] = useState<QueueState>(emptyQueue);
   const [agentRuns, setAgentRuns] = useState<AgentRun[]>([]);
   const [connectState, setConnectState] = useState<ConnectState | null>(null);
@@ -93,6 +96,7 @@ export default function Home() {
   useEffect(() => {
     let mounted = true;
     async function checkHealth() {
+      setIsCheckingHealth(true);
       try {
         const data = await fetchHealth();
         if (!mounted) return;
@@ -102,6 +106,8 @@ export default function Home() {
         if (mounted) {
           setHealthStatus("down");
         }
+      } finally {
+        if (mounted) setIsCheckingHealth(false);
       }
     }
     checkHealth();
@@ -144,6 +150,16 @@ export default function Home() {
         setQueue(queueData);
         setAgentRuns(agentsData.agentRuns);
         setConnectState(connectData);
+
+        if (activeTab === "reviews" && owner.trim() && repo.trim()) {
+          try {
+            const rStats = await fetchRepoStats(owner.trim(), repo.trim(), activeToken);
+            if (mounted) setRepoStats(rStats);
+          } catch {}
+        } else {
+          setRepoStats(null);
+        }
+
         try {
           localStorage.setItem("dashboard_stats", JSON.stringify(statsData));
           localStorage.setItem("dashboard_queue", JSON.stringify(queueData));
@@ -178,6 +194,10 @@ export default function Home() {
         const data = await fetchReviews(ownerPart, repoPart, String(prNumber), token);
         setReviews(data.reviews);
         setSelectedReview(data.reviews[0] ?? null);
+        try {
+          const rStats = await fetchRepoStats(ownerPart, repoPart, token);
+          setRepoStats(rStats);
+        } catch {}
       } catch (err) {
         setReviews([]);
         setSelectedReview(null);
@@ -209,6 +229,7 @@ export default function Home() {
 
   const visibleStats = useMemo(() => {
     const localFindings = reviews.flatMap((review) => review.findings ?? []);
+    if (repoStats) return repoStats;
     if (stats.reviews || stats.findings || stats.high || Number(stats.latestRisk)) return stats;
     return {
       reviews: reviews.length,
@@ -216,7 +237,7 @@ export default function Home() {
       high: localFindings.filter((finding) => ["critical", "high"].includes(finding.severity)).length,
       latestRisk: reviews[0]?.risk_score ?? "0"
     };
-  }, [reviews, stats]);
+  }, [reviews, stats, repoStats]);
 
   const riskDelta = useMemo(() => {
     const current = Number(visibleStats.latestRisk);
@@ -240,6 +261,10 @@ export default function Home() {
       const data = await fetchReviews(owner.trim(), repo.trim(), number.trim(), token);
       setReviews(data.reviews);
       setSelectedReview(data.reviews[0] ?? null);
+      try {
+        const rStats = await fetchRepoStats(owner.trim(), repo.trim(), token);
+        setRepoStats(rStats);
+      } catch {}
     } catch (err) {
       setReviews([]);
       setSelectedReview(null);
@@ -350,63 +375,65 @@ export default function Home() {
           <div className="status health-status-container">
             <span className="health-label">Services:</span>
             <div className="health-micro-badge" title="Neon Postgres Connection">
-              <span className={`dot ${healthDetails?.postgres ? "ok" : "down"}`} />
-              <span>DB ({healthDetails?.postgres ? "ok" : "down"})</span>
+              <span className={`dot ${isCheckingHealth ? "checking" : healthDetails?.postgres ? "ok" : "down"}`} />
+              <span>DB ({isCheckingHealth ? "checking" : healthDetails?.postgres ? "ok" : "down"})</span>
             </div>
             <div className="health-micro-badge" title="Redis / BullMQ Queue Connection">
-              <span className={`dot ${healthDetails?.redis ? "ok" : "down"}`} />
-              <span>Queue ({healthDetails?.redis ? "ok" : "down"})</span>
+              <span className={`dot ${isCheckingHealth ? "checking" : healthDetails?.redis ? "ok" : "down"}`} />
+              <span>Queue ({isCheckingHealth ? "checking" : healthDetails?.redis ? "ok" : "down"})</span>
             </div>
             <div className="health-micro-badge" title="FastAPI Agent Bridge Connection">
-              <span className={`dot ${healthDetails?.agent ? "ok" : "down"}`} />
-              <span>Agent ({healthDetails?.agent ? "ok" : "down"})</span>
+              <span className={`dot ${isCheckingHealth ? "checking" : healthDetails?.agent ? "ok" : "down"}`} />
+              <span>Agent ({isCheckingHealth ? "checking" : healthDetails?.agent ? "ok" : "down"})</span>
             </div>
             <div className="health-micro-badge" title="Pinecone RAG Vector Store Status">
-              <span className={`dot ${healthDetails?.pinecone ? "ok" : "down"}`} />
-              <span>RAG ({healthDetails?.pinecone ? "ok" : "down"})</span>
+              <span className={`dot ${isCheckingHealth ? "checking" : healthDetails?.pinecone ? "ok" : "down"}`} />
+              <span>RAG ({isCheckingHealth ? "checking" : healthDetails?.pinecone ? "ok" : "down"})</span>
             </div>
             <div className="health-micro-badge" title="Groq Inference API Connection">
-              <span className={`dot ${healthDetails?.groq ? "ok" : "down"}`} />
-              <span>Groq ({healthDetails?.groq ? "ok" : "down"})</span>
+              <span className={`dot ${isCheckingHealth ? "checking" : healthDetails?.groq ? "ok" : "down"}`} />
+              <span>Groq ({isCheckingHealth ? "checking" : healthDetails?.groq ? "ok" : "down"})</span>
             </div>
           </div>
         </div>
 
-        <div className="grid">
-          <Metric
-            label="Reviews"
-            value={visibleStats.reviews}
-            trend={stats.reviewsDelta && stats.reviewsDelta > 0 ? `▲ +${stats.reviewsDelta} 24h` : undefined}
-            history={stats.reviewsHistory}
-          />
-          <Metric
-            label="Findings"
-            value={visibleStats.findings}
-            trend={stats.findingsDelta && stats.findingsDelta > 0 ? `▲ +${stats.findingsDelta} 24h` : undefined}
-            history={stats.findingsHistory}
-          />
-          <Metric
-            label="High risk"
-            value={visibleStats.high}
-            trend={stats.highDelta && stats.highDelta > 0 ? `▲ +${stats.highDelta} 24h` : undefined}
-            isAlert={visibleStats.high > 0}
-            history={stats.highHistory}
-          />
-          <Metric
-            label="Latest risk"
-            value={visibleStats.latestRisk}
-            trend={
-              riskDelta > 0
-                ? `▲ +${riskDelta.toFixed(1)}`
-                : riskDelta < 0
-                ? `▼ ${riskDelta.toFixed(1)}`
-                : "—"
-            }
-            trendColor={riskDelta > 0 ? "var(--red)" : riskDelta < 0 ? "var(--green)" : undefined}
-            hasTooltip
-            history={stats.riskHistory}
-          />
-        </div>
+        {activeTab !== "connect" && (
+          <div className="grid">
+            <Metric
+              label={repoStats ? `${owner}/${repo} Reviews` : "Reviews"}
+              value={visibleStats.reviews}
+              trend={visibleStats.reviewsDelta && visibleStats.reviewsDelta > 0 ? `▲ +${visibleStats.reviewsDelta} 24h` : undefined}
+              history={visibleStats.reviewsHistory}
+            />
+            <Metric
+              label={repoStats ? "Repo Findings" : "Findings"}
+              value={visibleStats.findings}
+              trend={visibleStats.findingsDelta && visibleStats.findingsDelta > 0 ? `▲ +${visibleStats.findingsDelta} 24h` : undefined}
+              history={visibleStats.findingsHistory}
+            />
+            <Metric
+              label="High risk"
+              value={visibleStats.high}
+              trend={visibleStats.highDelta && visibleStats.highDelta > 0 ? `▲ +${visibleStats.highDelta} 24h` : undefined}
+              isAlert={visibleStats.high > 0}
+              history={visibleStats.highHistory}
+            />
+            <Metric
+              label="Latest risk"
+              value={visibleStats.latestRisk}
+              trend={
+                riskDelta > 0
+                  ? `▲ +${riskDelta.toFixed(1)}`
+                  : riskDelta < 0
+                  ? `▼ ${riskDelta.toFixed(1)}`
+                  : "—"
+              }
+              trendColor={riskDelta > 0 ? "var(--red)" : riskDelta < 0 ? "var(--green)" : undefined}
+              hasTooltip
+              history={visibleStats.riskHistory}
+            />
+          </div>
+        )}
 
         {error ? <p className="lookup-error">{error}</p> : null}
 

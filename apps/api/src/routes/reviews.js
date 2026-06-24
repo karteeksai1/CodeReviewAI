@@ -3,11 +3,13 @@ import { config } from "../config.js";
 import {
   createIndexingJob,
   getDashboardStats,
+  getRepoStats,
   getReviewDetail,
   listIndexingJobs,
   listRecentAgentRuns,
   listReviewsByPr,
   updateIndexingJob,
+  upsertRepository,
   query
 } from "../db/index.js";
 import { requireJwt } from "../middleware/auth.js";
@@ -34,16 +36,24 @@ function rateLimiter({ windowMs, max }) {
   };
 }
 
-reviewsRouter.get("/queue", requireJwt, async (_req, res) => {
-  const [waiting, active, delayed, failed, completed] = await Promise.all([
-    reviewQueue.getWaitingCount(),
-    reviewQueue.getActiveCount(),
-    reviewQueue.getDelayedCount(),
-    reviewQueue.getFailedCount(),
-    reviewQueue.getCompletedCount()
-  ]);
-  const jobs = await reviewQueue.getJobs(["waiting", "active", "delayed", "failed", "completed"], 0, 20, false);
-  const serializedJobs = await Promise.all(jobs.map(async (job) => ({
+reviewsRouter.get("/queue", requireJwt, async (req, res) => {
+  const userRepos = await query("select full_name from repositories where user_id = $1", [req.user.sub]);
+  const repoSet = new Set(userRepos.rows.map(r => r.full_name));
+
+  const allJobs = await reviewQueue.getJobs(["waiting", "active", "delayed", "failed", "completed"], 0, 1000, false);
+  const userJobs = allJobs.filter(job => repoSet.has(job.data?.payload?.repository?.full_name));
+
+  let waiting = 0, active = 0, delayed = 0, failed = 0, completed = 0;
+  for (const job of userJobs) {
+    const state = await job.getState();
+    if (state === "waiting") waiting++;
+    else if (state === "active") active++;
+    else if (state === "delayed") delayed++;
+    else if (state === "failed") failed++;
+    else if (state === "completed") completed++;
+  }
+
+  const serializedJobs = await Promise.all(userJobs.slice(0, 20).map(async (job) => ({
     id: job.id,
     name: job.name,
     state: await job.getState(),
@@ -54,6 +64,7 @@ reviewsRouter.get("/queue", requireJwt, async (_req, res) => {
     timestamp: job.timestamp,
     failedReason: job.failedReason
   })));
+
   res.json({
     waiting,
     active,
@@ -92,28 +103,41 @@ reviewsRouter.delete("/queue/jobs/*", requireJwt, async (req, res, next) => {
   }
 });
 
-reviewsRouter.get("/stats", requireJwt, async (_req, res, next) => {
+reviewsRouter.get("/stats", requireJwt, async (req, res, next) => {
   try {
-    res.json(await getDashboardStats());
+    res.json(await getDashboardStats(req.user.sub));
   } catch (err) {
     next(err);
   }
 });
 
-reviewsRouter.get("/agents", requireJwt, async (_req, res, next) => {
+reviewsRouter.get("/stats/repo", requireJwt, async (req, res, next) => {
   try {
-    res.json({ agentRuns: await listRecentAgentRuns() });
+    const { owner, repo } = req.query;
+    if (!owner || !repo) {
+      res.status(400).json({ error: "owner and repo are required" });
+      return;
+    }
+    res.json(await getRepoStats(req.user.sub, `${owner}/${repo}`));
   } catch (err) {
     next(err);
   }
 });
 
-reviewsRouter.get("/connect", requireJwt, async (_req, res, next) => {
+reviewsRouter.get("/agents", requireJwt, async (req, res, next) => {
+  try {
+    res.json({ agentRuns: await listRecentAgentRuns(req.user.sub) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+reviewsRouter.get("/connect", requireJwt, async (req, res, next) => {
   try {
     res.json({
       githubAppName: config.github.appName ?? "CodeReviewAI",
       installUrl: config.github.installUrl ?? null,
-      indexingJobs: await listIndexingJobs()
+      indexingJobs: await listIndexingJobs(req.user.sub)
     });
   } catch (err) {
     next(err);
@@ -127,7 +151,8 @@ reviewsRouter.post("/indexing", requireJwt, rateLimiter({ windowMs: 60 * 1000, m
       res.status(400).json({ error: "Enter a repository as owner/name." });
       return;
     }
-    const job = await createIndexingJob(repository);
+    await upsertRepository({ full_name: repository }, null, req.user.sub);
+    const job = await createIndexingJob(repository, req.user.sub);
     (async () => {
       try {
         await updateIndexingJob(job.id, { status: "indexing", message: "Cloning and embedding repository" });
@@ -170,7 +195,7 @@ reviewsRouter.delete("/indexing/:id", requireJwt, async (req, res, next) => {
       res.status(400).json({ error: "Job id must be numeric." });
       return;
     }
-    const result = await query("delete from indexing_jobs where id = $1 returning *", [Number(req.params.id)]);
+    const result = await query("delete from indexing_jobs where id = $1 and user_id = $2 returning *", [Number(req.params.id), req.user.sub]);
     if (result.rowCount === 0) {
       res.status(404).json({ error: "Indexing job not found." });
       return;
@@ -192,7 +217,7 @@ reviewsRouter.get("/pr", requireJwt, rateLimiter({ windowMs: 60 * 1000, max: 30 
       res.status(400).json({ error: "PR number must be a positive integer without leading zeros." });
       return;
     }
-    res.json({ reviews: await listReviewsByPr({ owner, repo, number: parseInt(String(number), 10) }) });
+    res.json({ reviews: await listReviewsByPr({ userId: req.user.sub, owner, repo, number: parseInt(String(number), 10) }) });
   } catch (err) {
     next(err);
   }
@@ -204,7 +229,7 @@ reviewsRouter.get("/:id", requireJwt, async (req, res, next) => {
       res.status(400).json({ error: "Review id must be numeric." });
       return;
     }
-    const review = await getReviewDetail(req.params.id);
+    const review = await getReviewDetail(req.user.sub, req.params.id);
     if (!review) {
       res.status(404).json({ error: "Review not found." });
       return;

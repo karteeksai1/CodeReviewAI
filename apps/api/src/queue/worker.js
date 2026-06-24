@@ -1,7 +1,7 @@
 import { Worker } from "bullmq";
 import crypto from "crypto";
 import { config } from "../config.js";
-import { createReview, initDb, insertFindings, updateReview, upsertAgentRuns, upsertPullRequest, upsertRepository } from "../db/index.js";
+import { createReview, initDb, insertFindings, query, updateReview, upsertAgentRuns, upsertPullRequest, upsertRepository } from "../db/index.js";
 import { logger } from "../logger.js";
 import { requestAgentReview } from "../services/agent-bridge.js";
 import { fetchPullRequestContext, postReviewSummary } from "../services/github.js";
@@ -17,7 +17,14 @@ const worker = new Worker(REVIEW_QUEUE_NAME, async (job) => {
   const pullRequest = payload.pull_request;
   const installationId = payload.installation?.id;
   const [owner, repo] = repository.full_name.split("/");
-  const repoRow = await upsertRepository(repository, installationId);
+  
+  let userId = null;
+  if (installationId) {
+    const res = await query("select user_id from repositories where installation_id = $1 and user_id is not null limit 1", [installationId]).catch(() => ({ rows: [] }));
+    if (res.rows[0]) userId = res.rows[0].user_id;
+  }
+  
+  const repoRow = await upsertRepository(repository, installationId, userId);
   const prRow = await upsertPullRequest(repoRow?.id, pullRequest);
   const review = await createReview({ pullRequestId: prRow?.id, queueJobId: String(job.id), status: "in_progress" });
   await upsertAgentRuns(review?.id, ["security", "performance", "style"].map((agent) => ({

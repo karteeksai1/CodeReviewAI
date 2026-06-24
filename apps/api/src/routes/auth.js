@@ -7,6 +7,10 @@ import { config } from "../config.js";
 
 export const authRouter = express.Router();
 
+function triggerWarmup() {
+  fetch(`${config.agentUrl.replace(/\/$/, "")}/warmup`, { method: "POST" }).catch(() => {});
+}
+
 authRouter.post("/login", async (req, res, next) => {
   try {
     const { email, password } = req.body ?? {};
@@ -26,6 +30,8 @@ authRouter.post("/login", async (req, res, next) => {
       res.status(401).json({ error: "Invalid email or password" });
       return;
     }
+
+    triggerWarmup();
 
     res.json({
       token: signUserToken(user),
@@ -61,6 +67,8 @@ authRouter.post("/signup", async (req, res, next) => {
       [trimmedEmail, passwordHash]
     );
     const user = result.rows[0];
+
+    triggerWarmup();
 
     res.status(201).json({
       token: signUserToken(user),
@@ -150,6 +158,8 @@ authRouter.post("/google", async (req, res, next) => {
       );
       user = result.rows[0];
     }
+
+    triggerWarmup();
 
     res.json({
       token: signUserToken(user),

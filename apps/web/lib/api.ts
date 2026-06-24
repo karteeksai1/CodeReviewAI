@@ -206,6 +206,15 @@ export async function fetchStats(token: string) {
   return (await response.json()) as DashboardStats;
 }
 
+export async function fetchRepoStats(owner: string, repo: string, token: string) {
+  const response = await fetch(`${API_URL}/reviews/stats/repo?owner=${encodeURIComponent(owner)}&repo=${encodeURIComponent(repo)}`, {
+    cache: "no-store",
+    headers: authHeaders(token)
+  });
+  if (!response.ok) throw new Error(await parseError(response, "Repo stats lookup failed"));
+  return (await response.json()) as DashboardStats;
+}
+
 export async function fetchAgentRuns(token: string) {
   const response = await fetch(`${API_URL}/reviews/agents`, {
     cache: "no-store",
