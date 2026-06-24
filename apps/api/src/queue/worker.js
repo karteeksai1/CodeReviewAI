@@ -19,7 +19,10 @@ const worker = new Worker(REVIEW_QUEUE_NAME, async (job) => {
   const [owner, repo] = repository.full_name.split("/");
   
   let userId = null;
-  if (installationId) {
+  const repoRes = await query("select user_id from repositories where full_name = $1", [repository.full_name]).catch(() => ({ rows: [] }));
+  if (repoRes.rows[0]?.user_id) {
+    userId = repoRes.rows[0].user_id;
+  } else if (installationId) {
     const res = await query("select user_id from repositories where installation_id = $1 and user_id is not null limit 1", [installationId]).catch(() => ({ rows: [] }));
     if (res.rows[0]) userId = res.rows[0].user_id;
   }
