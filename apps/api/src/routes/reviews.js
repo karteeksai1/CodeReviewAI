@@ -7,7 +7,8 @@ import {
   listIndexingJobs,
   listRecentAgentRuns,
   listReviewsByPr,
-  updateIndexingJob
+  updateIndexingJob,
+  query
 } from "../db/index.js";
 import { requireJwt } from "../middleware/auth.js";
 import { reviewQueue } from "../queue/index.js";
@@ -63,9 +64,9 @@ reviewsRouter.get("/queue", requireJwt, async (_req, res) => {
   });
 });
 
-reviewsRouter.post("/queue/jobs/:id/retry", requireJwt, async (req, res, next) => {
+reviewsRouter.post("/queue/jobs/*/retry", requireJwt, async (req, res, next) => {
   try {
-    const job = await reviewQueue.getJob(req.params.id);
+    const job = await reviewQueue.getJob(req.params[0]);
     if (!job) {
       res.status(404).json({ error: "Job not found" });
       return;
@@ -77,9 +78,9 @@ reviewsRouter.post("/queue/jobs/:id/retry", requireJwt, async (req, res, next) =
   }
 });
 
-reviewsRouter.delete("/queue/jobs/:id", requireJwt, async (req, res, next) => {
+reviewsRouter.delete("/queue/jobs/*", requireJwt, async (req, res, next) => {
   try {
-    const job = await reviewQueue.getJob(req.params.id);
+    const job = await reviewQueue.getJob(req.params[0]);
     if (!job) {
       res.status(404).json({ error: "Job not found" });
       return;
