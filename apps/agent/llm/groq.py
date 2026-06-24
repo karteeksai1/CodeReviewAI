@@ -21,7 +21,7 @@ async def groq_json(system: str, user: str, *, temperature: float = 0.1) -> dict
         return {}
 
     payload = {
-        "model": os.getenv("GROQ_MODEL", "llama-3.1-70b-versatile"),
+        "model": os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
         "temperature": temperature,
         "response_format": {"type": "json_object"},
         "messages": [
