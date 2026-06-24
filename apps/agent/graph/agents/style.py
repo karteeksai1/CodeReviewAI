@@ -1,3 +1,4 @@
+import asyncio
 import re
 
 from graph.agents.common import finding, iter_added_lines
@@ -10,9 +11,23 @@ async def style_agent(state):
     contexts = []
     namespace = state.get("repository", {}).get("fullName", "").replace("/", "__")
     
+    unique_files = {file.get("path") for file in state.get("files", []) if file.get("path")}
+    file_contexts = {}
+    
+    async def fetch_file_context(path):
+        try:
+            return path, await retrieve_context(namespace, f"{path} style standards")
+        except Exception:
+            return path, []
+            
+    results = await asyncio.gather(*(fetch_file_context(path) for path in unique_files))
+    for path, ctx in results:
+        file_contexts[path] = ctx
+        contexts.extend([c.get("text") for c in ctx if c.get("text")])
+        
     for file, line, code in iter_added_lines(state.get("files", [])):
-        context = await retrieve_context(namespace, f"{file.get('path')} style standards")
-        contexts.extend([c.get("text") for c in context if c.get("text")])
+        path = file.get("path")
+        context = file_contexts.get(path, [])
         
         if len(code) > 140:
             findings.append(finding("style", "low", "Line is difficult to scan", "Break the expression into named parts.", file, line, 0.7, rag_context=context))

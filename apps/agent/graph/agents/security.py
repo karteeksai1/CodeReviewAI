@@ -1,3 +1,4 @@
+import asyncio
 import re
 
 from graph.agents.common import finding, iter_added_lines
@@ -16,10 +17,24 @@ async def security_agent(state):
     contexts = []
     namespace = state.get("repository", {}).get("fullName", "").replace("/", "__")
     
+    unique_files = {file.get("path") for file in state.get("files", []) if file.get("path")}
+    file_contexts = {}
+    
+    async def fetch_file_context(path):
+        try:
+            return path, await retrieve_context(namespace, f"{path} security auth")
+        except Exception:
+            return path, []
+            
+    results = await asyncio.gather(*(fetch_file_context(path) for path in unique_files))
+    for path, ctx in results:
+        file_contexts[path] = ctx
+        contexts.extend([c.get("text") for c in ctx if c.get("text")])
+
     for file, line, code in iter_added_lines(state.get("files", [])):
         lower = code.lower()
-        context = await retrieve_context(namespace, f"{file.get('path')} security auth")
-        contexts.extend([c.get("text") for c in context if c.get("text")])
+        path = file.get("path")
+        context = file_contexts.get(path, [])
         
         if any(pattern.search(code) for pattern in SECRET_PATTERNS):
             findings.append(finding("security", "critical", "Potential secret committed in the diff", "A new line appears to contain a hard-coded credential. Move it to a secret store and rotate it.", file, line, 0.92, rag_context=context))

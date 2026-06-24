@@ -1,3 +1,4 @@
+import asyncio
 import re
 
 from graph.agents.common import finding, iter_added_lines
@@ -11,10 +12,24 @@ async def performance_agent(state):
     namespace = state.get("repository", {}).get("fullName", "").replace("/", "__")
     in_loop = False
     
+    unique_files = {file.get("path") for file in state.get("files", []) if file.get("path")}
+    file_contexts = {}
+    
+    async def fetch_file_context(path):
+        try:
+            return path, await retrieve_context(namespace, f"{path} performance query loop")
+        except Exception:
+            return path, []
+            
+    results = await asyncio.gather(*(fetch_file_context(path) for path in unique_files))
+    for path, ctx in results:
+        file_contexts[path] = ctx
+        contexts.extend([c.get("text") for c in ctx if c.get("text")])
+        
     for file, line, code in iter_added_lines(state.get("files", [])):
         lower = code.strip().lower()
-        context = await retrieve_context(namespace, f"{file.get('path')} performance query loop")
-        contexts.extend([c.get("text") for c in context if c.get("text")])
+        path = file.get("path")
+        context = file_contexts.get(path, [])
         
         if re.match(r"(for|while)\b", lower):
             in_loop = True
