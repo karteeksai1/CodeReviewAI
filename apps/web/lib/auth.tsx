@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { login as apiLogin, signup as apiSignup, loginWithGoogleMock as apiLoginWithGoogleMock, fetchMe, type AuthUser } from "./api";
+import { login as apiLogin, signup as apiSignup, loginWithGoogleToken as apiLoginWithGoogleToken, fetchMe, type AuthUser } from "./api";
 
 type AuthContextValue = {
   user: AuthUser | null;
@@ -9,7 +9,7 @@ type AuthContextValue = {
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   signup: (email: string, password: string) => Promise<void>;
-  loginWithGoogle: () => Promise<void>;
+  loginWithGoogle: (googleToken: string) => Promise<void>;
   logout: () => void;
 };
 
@@ -53,8 +53,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(result.user);
   }, []);
 
-  const loginWithGoogle = useCallback(async () => {
-    const result = await apiLoginWithGoogleMock();
+  const loginWithGoogle = useCallback(async (googleToken: string) => {
+    const result = await apiLoginWithGoogleToken(googleToken);
     window.localStorage.setItem(TOKEN_KEY, result.token);
     setToken(result.token);
     setUser(result.user);

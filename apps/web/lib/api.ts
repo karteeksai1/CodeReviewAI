@@ -140,10 +140,17 @@ export async function signup(email: string, password: string) {
   return (await response.json()) as { token: string; user: AuthUser };
 }
 
-export async function loginWithGoogleMock() {
-  const response = await fetch(`${API_URL}/auth/google-mock`, {
+export async function fetchAuthConfig() {
+  const response = await fetch(`${API_URL}/auth/config`, { cache: "no-store" });
+  if (!response.ok) throw new Error("Failed to fetch auth config");
+  return (await response.json()) as { googleClientId: string | null };
+}
+
+export async function loginWithGoogleToken(token: string) {
+  const response = await fetch(`${API_URL}/auth/google`, {
     method: "POST",
-    headers: { "content-type": "application/json" }
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ token })
   });
   if (!response.ok) throw new Error(await parseError(response, "Google login failed"));
   return (await response.json()) as { token: string; user: AuthUser };
@@ -235,6 +242,15 @@ export async function retryJob(id: string, token: string) {
   return response.json();
 }
 
+export async function deleteJob(id: string, token: string) {
+  const response = await fetch(`${API_URL}/reviews/queue/jobs/${id}`, {
+    method: "DELETE",
+    headers: authHeaders(token)
+  });
+  if (!response.ok) throw new Error(await parseError(response, "Delete job failed"));
+  return response.json();
+}
+
 export function parseGitHubUrl(url: string): { owner: string; repo: string; prNumber?: string } | null {
   const clean = url.trim().replace(/\/$/, "");
   const withoutProtocol = clean.replace(/^(https?:\/\/)?(www\.)?github\.com\//i, "");
@@ -252,5 +268,14 @@ export function parseGitHubUrl(url: string): { owner: string; repo: string; prNu
     return { owner, repo, prNumber };
   }
   return null;
+}
+
+export async function deleteIndexingJob(id: number, token: string) {
+  const response = await fetch(`${API_URL}/reviews/indexing/${id}`, {
+    method: "DELETE",
+    headers: authHeaders(token)
+  });
+  if (!response.ok) throw new Error(await parseError(response, "Delete indexing job failed"));
+  return response.json();
 }
 

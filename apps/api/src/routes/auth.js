@@ -1,5 +1,6 @@
 import bcrypt from "bcryptjs";
 import express from "express";
+import crypto from "crypto";
 import { findUserByEmail, query } from "../db/index.js";
 import { requireJwt, signUserToken } from "../middleware/auth.js";
 import { config } from "../config.js";
@@ -74,12 +75,53 @@ authRouter.post("/signup", async (req, res, next) => {
   }
 });
 
-authRouter.post("/google-mock", async (req, res, next) => {
+authRouter.get("/config", (req, res) => {
+  res.json({
+    googleClientId: config.googleClientId ?? null
+  });
+});
+
+authRouter.post("/google", async (req, res, next) => {
   try {
-    const email = "google-user@codereviewai.local";
+    const { token } = req.body ?? {};
+    if (!token) {
+      res.status(400).json({ error: "Google ID token (token) is required" });
+      return;
+    }
+
+    const response = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(token)}`);
+    if (!response.ok) {
+      res.status(401).json({ error: "Invalid Google ID token" });
+      return;
+    }
+
+    const payload = await response.json();
+    const now = Math.floor(Date.now() / 1000);
+    if (payload.exp && Number(payload.exp) < now) {
+      res.status(401).json({ error: "Google ID token has expired" });
+      return;
+    }
+
+    const validIssuer = ["accounts.google.com", "https://accounts.google.com"].includes(payload.iss);
+    if (!validIssuer) {
+      res.status(401).json({ error: "Invalid token issuer" });
+      return;
+    }
+
+    if (config.googleClientId && payload.aud !== config.googleClientId) {
+      res.status(401).json({ error: "Invalid token audience" });
+      return;
+    }
+
+    const email = payload.email?.toLowerCase();
+    if (!email) {
+      res.status(400).json({ error: "Email claim is missing in Google ID token" });
+      return;
+    }
+
     let user = await findUserByEmail(email);
     if (!user) {
-      const passwordHash = await bcrypt.hash("google-mock-password", 10);
+      const passwordHash = await bcrypt.hash(crypto.randomUUID(), 10);
       const result = await query(
         "insert into users (email, password_hash) values ($1, $2) returning id, email",
         [email, passwordHash]
@@ -92,7 +134,7 @@ authRouter.post("/google-mock", async (req, res, next) => {
       user: {
         id: user.id,
         email: user.email,
-        isAdmin: false
+        isAdmin: user.email.toLowerCase() === config.adminEmail.toLowerCase()
       }
     });
   } catch (err) {

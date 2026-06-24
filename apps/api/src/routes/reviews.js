@@ -77,6 +77,20 @@ reviewsRouter.post("/queue/jobs/:id/retry", requireJwt, async (req, res, next) =
   }
 });
 
+reviewsRouter.delete("/queue/jobs/:id", requireJwt, async (req, res, next) => {
+  try {
+    const job = await reviewQueue.getJob(req.params.id);
+    if (!job) {
+      res.status(404).json({ error: "Job not found" });
+      return;
+    }
+    await job.remove();
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
 reviewsRouter.get("/stats", requireJwt, async (_req, res, next) => {
   try {
     res.json(await getDashboardStats());
@@ -144,6 +158,23 @@ reviewsRouter.post("/indexing", requireJwt, rateLimiter({ windowMs: 60 * 1000, m
       }
     })();
     res.status(202).json({ indexingJob: job });
+  } catch (err) {
+    next(err);
+  }
+});
+
+reviewsRouter.delete("/indexing/:id", requireJwt, async (req, res, next) => {
+  try {
+    if (!/^\d+$/.test(req.params.id)) {
+      res.status(400).json({ error: "Job id must be numeric." });
+      return;
+    }
+    const result = await query("delete from indexing_jobs where id = $1 returning *", [Number(req.params.id)]);
+    if (result.rowCount === 0) {
+      res.status(404).json({ error: "Indexing job not found." });
+      return;
+    }
+    res.json({ ok: true });
   } catch (err) {
     next(err);
   }

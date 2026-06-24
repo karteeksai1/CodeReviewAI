@@ -24,5 +24,6 @@ export const config = {
     installUrl: process.env.GITHUB_APP_INSTALL_URL,
     privateKey: process.env.GITHUB_APP_PRIVATE_KEY?.replace(/\\n/g, "\n"),
     postComments: process.env.GITHUB_POST_COMMENTS !== "false"
-  }
+  },
+  googleClientId: process.env.GOOGLE_CLIENT_ID ?? ""
 };

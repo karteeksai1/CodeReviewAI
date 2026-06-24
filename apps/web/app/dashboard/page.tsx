@@ -23,6 +23,8 @@ import {
   fetchStats,
   requestIndexing,
   retryJob,
+  deleteJob,
+  deleteIndexingJob,
   parseGitHubUrl,
   type AgentRun,
   type ConnectState,
@@ -63,6 +65,7 @@ export default function Home() {
   const [initialFetching, setInitialFetching] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [retryingJobId, setRetryingJobId] = useState<string | null>(null);
+  const [deletingJobId, setDeletingJobId] = useState<string | null>(null);
   const [highlightedRunKey, setHighlightedRunKey] = useState<string | null>(null);
 
   const prNumberValid = /^[1-9]\d*$/.test(number.trim());
@@ -270,6 +273,30 @@ export default function Home() {
     }
   }
 
+  async function handleDeleteJob(jobId: string) {
+    if (!token) return;
+    setDeletingJobId(jobId);
+    try {
+      await deleteJob(jobId, token);
+      const queueData = await fetchQueue(token);
+      setQueue(queueData);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Dismiss job failed");
+    } finally {
+      setDeletingJobId(null);
+    }
+  }
+
+  async function handleDeleteIndexing(id: number) {
+    if (!token) return;
+    try {
+      await deleteIndexingJob(id, token);
+      setConnectState(await fetchConnectState(token));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Delete indexing job failed");
+    }
+  }
+
   async function startIndexing() {
     if (!token || !repositoryToIndex.trim()) return;
     try {
@@ -280,6 +307,10 @@ export default function Home() {
       setError(err instanceof Error ? err.message : "Indexing request failed");
     }
   }
+
+  const failedCount = useMemo(() => {
+    return queue.jobs.filter((job) => job.state === "failed").length;
+  }, [queue.jobs]);
 
   if (authLoading || !user) {
     return (
@@ -296,7 +327,7 @@ export default function Home() {
         <nav className="nav">
           <NavButton tab="reviews" activeTab={activeTab} setActiveTab={switchTab} icon={<GitPullRequest size={18} />} label="Reviews" />
           <NavButton tab="agents" activeTab={activeTab} setActiveTab={switchTab} icon={<Activity size={18} />} label="Agents" />
-          <NavButton tab="queue" activeTab={activeTab} setActiveTab={switchTab} icon={<RefreshCw size={18} />} label="Queue" badge={queue.failed > 0 ? queue.failed : undefined} badgeAlert={queue.failed > 0} />
+          <NavButton tab="queue" activeTab={activeTab} setActiveTab={switchTab} icon={<RefreshCw size={18} />} label="Queue" badge={failedCount > 0 ? failedCount : undefined} badgeAlert={failedCount > 0} />
           <NavButton tab="connect" activeTab={activeTab} setActiveTab={switchTab} icon={<GitBranch size={18} />} label="Connect" />
         </nav>
         <div className="sidebar-footer">
@@ -415,7 +446,9 @@ export default function Home() {
             queue={queue}
             initialFetching={initialFetching}
             handleRetry={handleRetry}
+            handleDelete={handleDeleteJob}
             retryingJobId={retryingJobId}
+            deletingJobId={deletingJobId}
           />
         ) : null}
 
@@ -428,6 +461,7 @@ export default function Home() {
             user={user}
             initialFetching={initialFetching}
             onReindex={handleReindex}
+            onDeleteIndexing={handleDeleteIndexing}
           />
         ) : null}
       </section>
@@ -784,11 +818,13 @@ function AgentsView({ agentRuns, initialFetching, setActiveTab, onRunClick, high
   );
 }
 
-function QueueView({ queue, initialFetching, handleRetry, retryingJobId }: {
+function QueueView({ queue, initialFetching, handleRetry, handleDelete, retryingJobId, deletingJobId }: {
   queue: QueueState;
   initialFetching: boolean;
   handleRetry: (jobId: string) => Promise<void>;
+  handleDelete: (jobId: string) => Promise<void>;
   retryingJobId: string | null;
+  deletingJobId: string | null;
 }) {
   if (initialFetching) {
     return (
@@ -824,7 +860,9 @@ function QueueView({ queue, initialFetching, handleRetry, retryingJobId }: {
             key={job.id}
             job={job}
             handleRetry={handleRetry}
+            handleDelete={handleDelete}
             retryingJobId={retryingJobId}
+            deletingJobId={deletingJobId}
           />
         ))}
       </div>
@@ -832,10 +870,12 @@ function QueueView({ queue, initialFetching, handleRetry, retryingJobId }: {
   );
 }
 
-function QueueRow({ job, handleRetry, retryingJobId }: {
+function QueueRow({ job, handleRetry, handleDelete, retryingJobId, deletingJobId }: {
   job: any;
   handleRetry: (jobId: string) => Promise<void>;
+  handleDelete: (jobId: string) => Promise<void>;
   retryingJobId: string | null;
+  deletingJobId: string | null;
 }) {
   const [showError, setShowError] = useState(false);
   const isStale = job.state === "failed" && job.failedReason?.includes("installation");
@@ -846,13 +886,23 @@ function QueueRow({ job, handleRetry, retryingJobId }: {
           {isStale ? "Stale / Unrecoverable" : job.state}
         </div>
         {job.state === "failed" && (
-          <button
-            className="retry-btn"
-            onClick={() => handleRetry(String(job.id))}
-            disabled={retryingJobId === String(job.id) || isStale}
-          >
-            {retryingJobId === String(job.id) ? "Retrying..." : "Retry"}
-          </button>
+          <div style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
+            <button
+              className="retry-btn"
+              onClick={() => handleRetry(String(job.id))}
+              disabled={retryingJobId === String(job.id) || deletingJobId === String(job.id) || isStale}
+            >
+              {retryingJobId === String(job.id) ? "Retrying..." : "Retry"}
+            </button>
+            <button
+              className="retry-btn"
+              style={{ background: "transparent", color: "var(--red)", borderColor: "var(--red)" }}
+              onClick={() => handleDelete(String(job.id))}
+              disabled={retryingJobId === String(job.id) || deletingJobId === String(job.id)}
+            >
+              {deletingJobId === String(job.id) ? "Dismissing..." : "Dismiss"}
+            </button>
+          </div>
         )}
       </div>
       <div>
@@ -873,7 +923,7 @@ function QueueRow({ job, handleRetry, retryingJobId }: {
   );
 }
 
-function ConnectView({ connectState, repositoryToIndex, setRepositoryToIndex, startIndexing, user, initialFetching, onReindex }: {
+function ConnectView({ connectState, repositoryToIndex, setRepositoryToIndex, startIndexing, user, initialFetching, onReindex, onDeleteIndexing }: {
   connectState: ConnectState | null;
   repositoryToIndex: string;
   setRepositoryToIndex: (value: string) => void;
@@ -881,6 +931,7 @@ function ConnectView({ connectState, repositoryToIndex, setRepositoryToIndex, st
   user: any;
   initialFetching: boolean;
   onReindex: (repoName: string) => void;
+  onDeleteIndexing: (id: number) => Promise<void>;
 }) {
   if (initialFetching) {
     return (
@@ -892,6 +943,24 @@ function ConnectView({ connectState, repositoryToIndex, setRepositoryToIndex, st
   }
 
   const showSetupCard = !connectState?.installUrl && user?.isAdmin;
+
+  const groupedJobs = useMemo(() => {
+    const groups: Record<string, any[]> = {};
+    for (const job of (connectState?.indexingJobs ?? [])) {
+      if (!groups[job.repository_full_name]) {
+        groups[job.repository_full_name] = [];
+      }
+      groups[job.repository_full_name].push(job);
+    }
+    return Object.entries(groups).map(([repoName, jobs]) => {
+      const sorted = [...jobs].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      return {
+        repository_full_name: repoName,
+        latestJob: sorted[0],
+        history: sorted.slice(1)
+      };
+    });
+  }, [connectState?.indexingJobs]);
 
   return (
     <section className="section">
@@ -935,20 +1004,99 @@ function ConnectView({ connectState, repositoryToIndex, setRepositoryToIndex, st
         </div>
       </div>
       <div className="run-list">
-        {(connectState?.indexingJobs ?? []).map((job) => (
-          <article className="run-card" key={job.id}>
-            <div className="connect-job-header">
-              <strong>{job.repository_full_name}</strong>
-              <button className="reindex-btn" onClick={() => onReindex(job.repository_full_name)}>
-                <RefreshCw size={12} /> Re-index
-              </button>
-            </div>
-            <div className="progress-track"><span style={{ width: `${job.chunks ? Math.min(100, (job.embedded / job.chunks) * 100) : 12}%` }} /></div>
-            <p className="muted">{job.status} · {job.embedded}/{job.chunks} embedded · {formatRelativeTime(job.created_at)}</p>
-          </article>
+        {groupedJobs.map((group) => (
+          <RepoIndexingCard
+            key={group.repository_full_name}
+            group={group}
+            onReindex={onReindex}
+            onDelete={onDeleteIndexing}
+          />
         ))}
       </div>
     </section>
+  );
+}
+
+function RepoIndexingCard({ group, onReindex, onDelete }: {
+  group: { repository_full_name: string; latestJob: any; history: any[] };
+  onReindex: (repoName: string) => void;
+  onDelete: (id: number) => Promise<void>;
+}) {
+  const [showHistory, setShowHistory] = useState(false);
+  return (
+    <div className="repo-indexing-card-container" style={{ marginBottom: "16px" }}>
+      <IndexingJobCard job={group.latestJob} onReindex={onReindex} onDelete={onDelete} />
+      
+      {group.history.length > 0 && (
+        <div style={{ marginLeft: "16px", marginTop: "8px" }}>
+          <button
+            className="reindex-btn"
+            style={{ fontSize: "11px", padding: "2px 6px" }}
+            onClick={() => setShowHistory(!showHistory)}
+          >
+            {showHistory ? "Hide historical attempts ▲" : `Show historical attempts (${group.history.length}) ▼`}
+          </button>
+          
+          {showHistory && (
+            <div style={{ marginTop: "8px", display: "grid", gap: "8px" }}>
+              {group.history.map((histJob) => (
+                <IndexingJobCard key={histJob.id} job={histJob} onReindex={onReindex} onDelete={onDelete} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function IndexingJobCard({ job, onReindex, onDelete }: {
+  job: any;
+  onReindex: (repoName: string) => void;
+  onDelete: (id: number) => Promise<void>;
+}) {
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  return (
+    <article className="run-card">
+      <div className="connect-job-header">
+        <strong>{job.repository_full_name}</strong>
+        <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+          <button className="reindex-btn" onClick={() => onReindex(job.repository_full_name)}>
+            <RefreshCw size={12} /> Re-index
+          </button>
+          
+          {confirmDelete ? (
+            <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
+              <button
+                className="reindex-btn"
+                style={{ color: "var(--red)", borderColor: "var(--red)" }}
+                onClick={() => onDelete(job.id)}
+              >
+                Confirm
+              </button>
+              <button
+                className="reindex-btn"
+                onClick={() => setConfirmDelete(false)}
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <button
+              className="reindex-btn"
+              style={{ color: "var(--red)" }}
+              onClick={() => setConfirmDelete(true)}
+            >
+              Delete
+            </button>
+          )}
+        </div>
+      </div>
+      <div className="progress-track">
+        <span style={{ width: `${job.chunks ? Math.min(100, (job.embedded / job.chunks) * 100) : 12}%` }} />
+      </div>
+      <p className="muted">{job.status} · {job.embedded}/{job.chunks} embedded · {formatRelativeTime(job.created_at)}</p>
+    </article>
   );
 }
 

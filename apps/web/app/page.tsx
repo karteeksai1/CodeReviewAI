@@ -4,6 +4,13 @@ import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import { GitPullRequest, ArrowRight, ShieldCheck } from "lucide-react";
 import { useAuth } from "../lib/auth";
+import { fetchAuthConfig } from "../lib/api";
+
+declare global {
+  interface Window {
+    google: any;
+  }
+}
 
 export default function LandingPage() {
   const router = useRouter();
@@ -14,12 +21,28 @@ export default function LandingPage() {
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [googleClientId, setGoogleClientId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!loading && user) {
       router.replace("/dashboard");
     }
   }, [user, loading, router]);
+
+  useEffect(() => {
+    fetchAuthConfig()
+      .then((cfg) => {
+        setGoogleClientId(cfg.googleClientId);
+        if (cfg.googleClientId) {
+          const script = document.createElement("script");
+          script.src = "https://accounts.google.com/gsi/client";
+          script.async = true;
+          script.defer = true;
+          document.head.appendChild(script);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,14 +64,28 @@ export default function LandingPage() {
   };
 
   const handleGoogleLogin = async () => {
+    if (!googleClientId) {
+      setError("Google Sign-In is not configured. Please set GOOGLE_CLIENT_ID in the .env file.");
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
-      await loginWithGoogle();
-      router.replace("/dashboard");
+      window.google.accounts.id.initialize({
+        client_id: googleClientId,
+        callback: async (response: any) => {
+          try {
+            await loginWithGoogle(response.credential);
+            router.replace("/dashboard");
+          } catch (err) {
+            setError(err instanceof Error ? err.message : "Google login failed");
+            setSubmitting(false);
+          }
+        }
+      });
+      window.google.accounts.id.prompt();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Google login failed");
-    } finally {
+      setError("Google Sign-In failed to load. Please try again.");
       setSubmitting(false);
     }
   };
@@ -73,7 +110,47 @@ export default function LandingPage() {
       <section className="landing-hero" id="hero">
         <div className="hero-visual">
           <div className="hero-logo-mark">✱</div>
-          <img src="/hero-bg.jpg" className="hero-image" alt="Background" loading="eager" />
+          <svg
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              width: "100%",
+              height: "100%",
+              opacity: 0.75,
+              zIndex: 1,
+              pointerEvents: "none"
+            }}
+            viewBox="0 0 800 600"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+            preserveAspectRatio="xMidYMid slice"
+          >
+            <defs>
+              <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#030c05" />
+                <stop offset="100%" stopColor="#0c2314" />
+              </linearGradient>
+              <filter id="motionBlur" x="-20%" y="-20%" width="140%" height="140%">
+                <feGaussianBlur stdDeviation="40" />
+              </filter>
+            </defs>
+            <rect width="800" height="600" fill="url(#bgGrad)" />
+            <g filter="url(#motionBlur)">
+              <path d="M 900 -100 L 300 700" stroke="#1b4332" strokeWidth="180" opacity="0.6" strokeLinecap="round" />
+              <path d="M 800 -200 L 100 600" stroke="#2d6a4f" strokeWidth="120" opacity="0.5" strokeLinecap="round" />
+              <path d="M 1100 -50 L 500 750" stroke="#081c10" strokeWidth="200" opacity="0.8" strokeLinecap="round" />
+              <path d="M 750 -50 L 250 650" stroke="#52b788" strokeWidth="60" opacity="0.4" strokeLinecap="round" />
+              <path d="M 850 50 L 450 700" stroke="#74c69d" strokeWidth="40" opacity="0.3" strokeLinecap="round" />
+              <path d="M 600 -150 L 100 500" stroke="#d8f3dc" strokeWidth="15" opacity="0.25" strokeLinecap="round" />
+              <path d="M 700 -80 L 300 520" stroke="#ffffff" strokeWidth="8" opacity="0.35" strokeLinecap="round" />
+              <path d="M 950 150 L 600 650" stroke="#52b788" strokeWidth="80" opacity="0.25" strokeLinecap="round" />
+              <path d="M 500 -200 L 0 500" stroke="#2d6a4f" strokeWidth="90" opacity="0.3" strokeLinecap="round" />
+            </g>
+          </svg>
+          <div className="hero-text-overlay">
+            <h1 className="hero-overlay-title">Catch what humans miss.</h1>
+          </div>
         </div>
 
         <div className="hero-panel">
