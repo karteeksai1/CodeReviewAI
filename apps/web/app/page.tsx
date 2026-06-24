@@ -73,31 +73,7 @@ export default function LandingPage() {
       <section className="landing-hero" id="hero">
         <div className="hero-visual">
           <div className="hero-logo-mark">✱</div>
-          <svg className="hero-svg" viewBox="0 0 800 600" xmlns="http://www.w3.org/2000/svg">
-            <defs>
-              <linearGradient id="forest-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="#070c08" />
-                <stop offset="50%" stopColor="#0f2319" />
-                <stop offset="100%" stopColor="#030504" />
-              </linearGradient>
-              <linearGradient id="line-grad" x1="0%" y1="0%" x2="100%" y2="0%">
-                <stop offset="0%" stopColor="#1b4332" stopOpacity="0" />
-                <stop offset="50%" stopColor="#52b788" stopOpacity="0.6" />
-                <stop offset="100%" stopColor="#1b4332" stopOpacity="0" />
-              </linearGradient>
-            </defs>
-            <rect width="800" height="600" fill="url(#forest-grad)" />
-            <path d="M-100 150 C 200 300, 400 100, 900 250" fill="none" stroke="url(#line-grad)" strokeWidth="3" />
-            <path d="M-100 250 C 300 100, 500 450, 900 350" fill="none" stroke="url(#line-grad)" strokeWidth="2" strokeDasharray="10, 5" />
-            <path d="M-100 350 C 150 450, 600 150, 900 450" fill="none" stroke="url(#line-grad)" strokeWidth="4" />
-            <circle cx="200" cy="200" r="6" fill="#1b4332" stroke="#52b788" strokeWidth="2" />
-            <circle cx="450" cy="180" r="8" fill="#1b4332" stroke="#52b788" strokeWidth="2" />
-            <circle cx="350" cy="380" r="6" fill="#1b4332" stroke="#52b788" strokeWidth="2" />
-            <circle cx="600" cy="320" r="10" fill="#1b4332" stroke="#52b788" strokeWidth="2" />
-            <line x1="200" y1="200" x2="450" y2="180" stroke="#1b4332" strokeWidth="1.5" strokeDasharray="5, 5" />
-            <line x1="350" y1="380" x2="450" y2="180" stroke="#1b4332" strokeWidth="1.5" />
-            <line x1="450" y1="180" x2="600" y2="320" stroke="#1b4332" strokeWidth="1.5" />
-          </svg>
+          <img src="/hero-bg.jpg" className="hero-image" alt="Background" loading="eager" />
           <div className="hero-text-overlay">
             <h1 className="hero-overlay-title">Catch what humans miss in pull requests.</h1>
             <p className="hero-overlay-sub">Speed, depth, and parallel multi-agent codebase review.</p>

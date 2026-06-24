@@ -3,6 +3,7 @@ import express from "express";
 import { config } from "../config.js";
 import { enqueueReview } from "../queue/index.js";
 import { logger } from "../logger.js";
+import { MissingInstallationIdError } from "../errors.js";
 
 export const webhookRouter = express.Router();
 
@@ -37,8 +38,7 @@ webhookRouter.post("/", express.raw({ type: "*/*", limit: "5mb" }), async (req, 
     const installationId = payload.installation?.id;
     if (!installationId) {
       logger.error({ deliveryId, eventName }, "Webhook payload missing installation.id");
-      res.status(400).json({ error: "Missing installation ID on payload" });
-      return;
+      throw new MissingInstallationIdError();
     }
     const job = await enqueueReview(eventName, payload);
     res.status(202).json({ accepted: true, queued: true, jobId: job.id, deliveryId });

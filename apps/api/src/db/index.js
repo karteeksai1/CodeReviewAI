@@ -219,7 +219,7 @@ export async function upsertAgentRuns(reviewId, runs = []) {
 }
 
 export async function getDashboardStats() {
-  if (!pool) return { reviews: 0, findings: 0, high: 0, latestRisk: 0, reviewsDelta: 0, findingsDelta: 0, highDelta: 0, previousRisk: 0 };
+  if (!pool) return { reviews: 0, findings: 0, high: 0, latestRisk: 0, reviewsDelta: 0, findingsDelta: 0, highDelta: 0, previousRisk: 0, reviewsHistory: [], findingsHistory: [], highHistory: [], riskHistory: [] };
   const result = await query(`
     select
       (select count(*)::int from reviews) as reviews,
@@ -229,7 +229,39 @@ export async function getDashboardStats() {
       (select count(*)::int from findings where severity in ('critical', 'high')) as high,
       (select count(*)::int from findings where severity in ('critical', 'high') and created_at > now() - interval '24 hours') as "highDelta",
       coalesce((select risk_score::float from reviews where risk_score is not null order by created_at desc limit 1), 0) as "latestRisk",
-      coalesce((select risk_score::float from reviews where risk_score is not null order by created_at desc limit 1 offset 1), 0) as "previousRisk"
+      coalesce((select risk_score::float from reviews where risk_score is not null order by created_at desc limit 1 offset 1), 0) as "previousRisk",
+      (select array(
+        select coalesce(count(r.id)::int, 0)
+        from generate_series(now() - interval '6 days', now(), '1 day') as d
+        left join reviews r on r.created_at::date = d::date
+        group by d::date
+        order by d::date
+      )) as "reviewsHistory",
+      (select array(
+        select coalesce(count(f.id)::int, 0)
+        from generate_series(now() - interval '6 days', now(), '1 day') as d
+        left join findings f on f.created_at::date = d::date
+        group by d::date
+        order by d::date
+      )) as "findingsHistory",
+      (select array(
+        select coalesce(count(f.id)::int, 0)
+        from generate_series(now() - interval '6 days', now(), '1 day') as d
+        left join findings f on f.created_at::date = d::date and f.severity in ('critical', 'high')
+        group by d::date
+        order by d::date
+      )) as "highHistory",
+      (select array(
+        select coalesce(risk_score::float, 0)
+        from (
+          select risk_score, created_at
+          from reviews
+          where risk_score is not null
+          order by created_at desc
+          limit 7
+        ) sub
+        order by created_at asc
+      )) as "riskHistory"
   `);
   return result.rows[0];
 }

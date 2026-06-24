@@ -23,6 +23,7 @@ import {
   fetchStats,
   requestIndexing,
   retryJob,
+  parseGitHubUrl,
   type AgentRun,
   type ConnectState,
   type DashboardStats,
@@ -62,6 +63,7 @@ export default function Home() {
   const [initialFetching, setInitialFetching] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [retryingJobId, setRetryingJobId] = useState<string | null>(null);
+  const [highlightedRunKey, setHighlightedRunKey] = useState<string | null>(null);
 
   const prNumberValid = /^[1-9]\d*$/.test(number.trim());
   const canSearch = Boolean(owner.trim() && repo.trim() && prNumberValid && token && !loading);
@@ -71,44 +73,83 @@ export default function Home() {
   }, [authLoading, user, router]);
 
   useEffect(() => {
-    fetchHealth()
-      .then((data) => {
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get("tab") as Tab;
+    if (tab && ["reviews", "agents", "queue", "connect"].includes(tab)) {
+      setActiveTab(tab);
+    }
+  }, []);
+
+  const switchTab = (tab: Tab) => {
+    setActiveTab(tab);
+    const url = new URL(window.location.href);
+    url.searchParams.set("tab", tab);
+    window.history.pushState(null, "", url.toString());
+  };
+
+  useEffect(() => {
+    let mounted = true;
+    async function checkHealth() {
+      try {
+        const data = await fetchHealth();
+        if (!mounted) return;
         setHealthDetails(data);
         setHealthStatus(data.status === "healthy" ? "ok" : "down");
-      })
-      .catch(() => {
-        setHealthStatus("down");
-      });
+      } catch {
+        if (mounted) {
+          setHealthStatus("down");
+        }
+      }
+    }
+    checkHealth();
+    const healthTimer = window.setInterval(checkHealth, 5000);
+    return () => {
+      mounted = false;
+      window.clearInterval(healthTimer);
+    };
   }, []);
 
   useEffect(() => {
     if (!token) return;
+
+    try {
+      const cachedStats = localStorage.getItem("dashboard_stats");
+      const cachedQueue = localStorage.getItem("dashboard_queue");
+      const cachedAgents = localStorage.getItem("dashboard_agents");
+      const cachedConnect = localStorage.getItem("dashboard_connect");
+      if (cachedStats) setStats(JSON.parse(cachedStats));
+      if (cachedQueue) setQueue(JSON.parse(cachedQueue));
+      if (cachedAgents) setAgentRuns(JSON.parse(cachedAgents));
+      if (cachedConnect) setConnectState(JSON.parse(cachedConnect));
+      if (cachedStats || cachedQueue || cachedAgents || cachedConnect) {
+        setInitialFetching(false);
+      }
+    } catch {}
+
     const activeToken = token;
     let mounted = true;
     async function refresh() {
       try {
-        const [statsData, queueData, agentsData, connectData, healthData] = await Promise.all([
+        const [statsData, queueData, agentsData, connectData] = await Promise.all([
           fetchStats(activeToken),
           fetchQueue(activeToken),
           fetchAgentRuns(activeToken),
-          fetchConnectState(activeToken),
-          fetchHealth().catch(() => null)
+          fetchConnectState(activeToken)
         ]);
         if (!mounted) return;
         setStats(statsData);
         setQueue(queueData);
         setAgentRuns(agentsData.agentRuns);
         setConnectState(connectData);
-        if (healthData) {
-          setHealthDetails(healthData);
-          setHealthStatus(healthData.status === "healthy" ? "ok" : "down");
-        } else {
-          setHealthStatus("down");
-        }
+        try {
+          localStorage.setItem("dashboard_stats", JSON.stringify(statsData));
+          localStorage.setItem("dashboard_queue", JSON.stringify(queueData));
+          localStorage.setItem("dashboard_agents", JSON.stringify(agentsData.agentRuns));
+          localStorage.setItem("dashboard_connect", JSON.stringify(connectData));
+        } catch {}
         setInitialFetching(false);
       } catch {
         if (mounted) {
-          setHealthStatus("down");
           setInitialFetching(false);
         }
       }
@@ -120,6 +161,48 @@ export default function Home() {
       window.clearInterval(timer);
     };
   }, [token]);
+
+  const handleAgentRunClick = async (fullName: string, prNumber: number) => {
+    const [ownerPart, repoPart] = fullName.split("/");
+    setOwner(ownerPart);
+    setRepo(repoPart);
+    setNumber(String(prNumber));
+    switchTab("reviews");
+    if (token) {
+      setLoading(true);
+      setError(null);
+      try {
+        const data = await fetchReviews(ownerPart, repoPart, String(prNumber), token);
+        setReviews(data.reviews);
+        setSelectedReview(data.reviews[0] ?? null);
+      } catch (err) {
+        setReviews([]);
+        setSelectedReview(null);
+        setError(err instanceof Error ? err.message : "Review lookup failed");
+      } finally {
+        setLoading(false);
+      }
+    }
+  };
+
+  const handlePipelineNodeClick = (agent: string, reviewId: number) => {
+    switchTab("agents");
+    const key = `${reviewId}-${agent}`;
+    setHighlightedRunKey(key);
+    setTimeout(() => {
+      setHighlightedRunKey(null);
+    }, 3000);
+  };
+
+  const handleReindex = async (repoName: string) => {
+    if (!token) return;
+    try {
+      await requestIndexing(repoName, token);
+      setConnectState(await fetchConnectState(token));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Re-indexing request failed");
+    }
+  };
 
   const visibleStats = useMemo(() => {
     const localFindings = reviews.flatMap((review) => review.findings ?? []);
@@ -211,10 +294,10 @@ export default function Home() {
       <aside className="sidebar">
         <div className="brand"><ShieldCheck size={24} />CodeReviewAI</div>
         <nav className="nav">
-          <NavButton tab="reviews" activeTab={activeTab} setActiveTab={setActiveTab} icon={<GitPullRequest size={18} />} label="Reviews" />
-          <NavButton tab="agents" activeTab={activeTab} setActiveTab={setActiveTab} icon={<Activity size={18} />} label="Agents" />
-          <NavButton tab="queue" activeTab={activeTab} setActiveTab={setActiveTab} icon={<RefreshCw size={18} />} label="Queue" />
-          <NavButton tab="connect" activeTab={activeTab} setActiveTab={setActiveTab} icon={<GitBranch size={18} />} label="Connect" />
+          <NavButton tab="reviews" activeTab={activeTab} setActiveTab={switchTab} icon={<GitPullRequest size={18} />} label="Reviews" />
+          <NavButton tab="agents" activeTab={activeTab} setActiveTab={switchTab} icon={<Activity size={18} />} label="Agents" />
+          <NavButton tab="queue" activeTab={activeTab} setActiveTab={switchTab} icon={<RefreshCw size={18} />} label="Queue" badge={queue.failed > 0 ? queue.failed : undefined} badgeAlert={queue.failed > 0} />
+          <NavButton tab="connect" activeTab={activeTab} setActiveTab={switchTab} icon={<GitBranch size={18} />} label="Connect" />
         </nav>
         <div className="sidebar-footer">
           <div className="user-email">
@@ -236,24 +319,24 @@ export default function Home() {
           <div className="status health-status-container">
             <span className="health-label">Services:</span>
             <div className="health-micro-badge" title="Neon Postgres Connection">
-              <span className="dot" style={{ background: healthDetails?.postgres ? "var(--green)" : "var(--red)" }} />
-              <span>DB</span>
+              <span className={`dot ${healthDetails?.postgres ? "ok" : "down"}`} />
+              <span>DB ({healthDetails?.postgres ? "ok" : "down"})</span>
             </div>
             <div className="health-micro-badge" title="Redis / BullMQ Queue Connection">
-              <span className="dot" style={{ background: healthDetails?.redis ? "var(--green)" : "var(--red)" }} />
-              <span>Queue</span>
+              <span className={`dot ${healthDetails?.redis ? "ok" : "down"}`} />
+              <span>Queue ({healthDetails?.redis ? "ok" : "down"})</span>
             </div>
             <div className="health-micro-badge" title="FastAPI Agent Bridge Connection">
-              <span className="dot" style={{ background: healthDetails?.agent ? "var(--green)" : "var(--red)" }} />
-              <span>Agent</span>
+              <span className={`dot ${healthDetails?.agent ? "ok" : "down"}`} />
+              <span>Agent ({healthDetails?.agent ? "ok" : "down"})</span>
             </div>
             <div className="health-micro-badge" title="Pinecone RAG Vector Store Status">
-              <span className="dot" style={{ background: healthDetails?.pinecone ? "var(--green)" : "var(--red)" }} />
-              <span>RAG</span>
+              <span className={`dot ${healthDetails?.pinecone ? "ok" : "down"}`} />
+              <span>RAG ({healthDetails?.pinecone ? "ok" : "down"})</span>
             </div>
             <div className="health-micro-badge" title="Groq Inference API Connection">
-              <span className="dot" style={{ background: healthDetails?.groq ? "var(--green)" : "var(--red)" }} />
-              <span>Groq</span>
+              <span className={`dot ${healthDetails?.groq ? "ok" : "down"}`} />
+              <span>Groq ({healthDetails?.groq ? "ok" : "down"})</span>
             </div>
           </div>
         </div>
@@ -263,17 +346,20 @@ export default function Home() {
             label="Reviews"
             value={visibleStats.reviews}
             trend={stats.reviewsDelta && stats.reviewsDelta > 0 ? `▲ +${stats.reviewsDelta} 24h` : undefined}
+            history={stats.reviewsHistory}
           />
           <Metric
             label="Findings"
             value={visibleStats.findings}
             trend={stats.findingsDelta && stats.findingsDelta > 0 ? `▲ +${stats.findingsDelta} 24h` : undefined}
+            history={stats.findingsHistory}
           />
           <Metric
             label="High risk"
             value={visibleStats.high}
             trend={stats.highDelta && stats.highDelta > 0 ? `▲ +${stats.highDelta} 24h` : undefined}
             isAlert={visibleStats.high > 0}
+            history={stats.highHistory}
           />
           <Metric
             label="Latest risk"
@@ -287,6 +373,7 @@ export default function Home() {
             }
             trendColor={riskDelta > 0 ? "var(--red)" : riskDelta < 0 ? "var(--green)" : undefined}
             hasTooltip
+            history={stats.riskHistory}
           />
         </div>
 
@@ -308,7 +395,8 @@ export default function Home() {
             lookup={lookup}
             openReview={openReview}
             initialFetching={initialFetching}
-            setActiveTab={setActiveTab}
+            setActiveTab={switchTab}
+            onPipelineNodeClick={handlePipelineNodeClick}
           />
         ) : null}
 
@@ -316,7 +404,9 @@ export default function Home() {
           <AgentsView
             agentRuns={agentRuns}
             initialFetching={initialFetching}
-            setActiveTab={setActiveTab}
+            setActiveTab={switchTab}
+            onRunClick={handleAgentRunClick}
+            highlightedRunKey={highlightedRunKey}
           />
         ) : null}
 
@@ -337,6 +427,7 @@ export default function Home() {
             startIndexing={startIndexing}
             user={user}
             initialFetching={initialFetching}
+            onReindex={handleReindex}
           />
         ) : null}
       </section>
@@ -344,16 +435,22 @@ export default function Home() {
   );
 }
 
-function NavButton({ tab, activeTab, setActiveTab, icon, label }: {
+function NavButton({ tab, activeTab, setActiveTab, icon, label, badge, badgeAlert }: {
   tab: Tab;
   activeTab: Tab;
   setActiveTab: (tab: Tab) => void;
   icon: ReactNode;
   label: string;
+  badge?: number;
+  badgeAlert?: boolean;
 }) {
   return (
     <button className={`nav-item ${activeTab === tab ? "active" : ""}`} onClick={() => setActiveTab(tab)}>
-      {icon}{label}
+      {icon}
+      <span>{label}</span>
+      {badge !== undefined && (
+        <span className={`nav-badge ${badgeAlert ? "alert" : ""}`}>{badge}</span>
+      )}
     </button>
   );
 }
@@ -374,19 +471,58 @@ function ReviewsView(props: {
   openReview: (review: Review) => void;
   initialFetching: boolean;
   setActiveTab: (tab: Tab) => void;
+  onPipelineNodeClick?: (agent: string, reviewId: number) => void;
 }) {
   return (
     <section className="section">
       <div className="section-head">
         <h2>Pull request lookup</h2>
         <div className="lookup">
-          <input placeholder="owner" value={props.owner} onChange={(event) => props.setOwner(event.target.value)} />
-          <input placeholder="repo" value={props.repo} onChange={(event) => props.setRepo(event.target.value)} />
+          <input
+            placeholder="owner"
+            value={props.owner}
+            onChange={(event) => {
+              const val = event.target.value;
+              const parsed = parseGitHubUrl(val);
+              if (parsed && (val.includes("/") || val.includes("github.com"))) {
+                props.setOwner(parsed.owner);
+                props.setRepo(parsed.repo);
+                if (parsed.prNumber) props.setNumber(parsed.prNumber);
+              } else {
+                props.setOwner(val);
+              }
+            }}
+          />
+          <input
+            placeholder="repo"
+            value={props.repo}
+            onChange={(event) => {
+              const val = event.target.value;
+              const parsed = parseGitHubUrl(val);
+              if (parsed && (val.includes("/") || val.includes("github.com"))) {
+                props.setOwner(parsed.owner);
+                props.setRepo(parsed.repo);
+                if (parsed.prNumber) props.setNumber(parsed.prNumber);
+              } else {
+                props.setRepo(val);
+              }
+            }}
+          />
           <input
             placeholder="PR #"
             inputMode="numeric"
             value={props.number}
-            onChange={(event) => props.setNumber(event.target.value.replace(/\D/g, "").replace(/^0+/, ""))}
+            onChange={(event) => {
+              const val = event.target.value;
+              const parsed = parseGitHubUrl(val);
+              if (parsed && (val.includes("/") || val.includes("github.com"))) {
+                props.setOwner(parsed.owner);
+                props.setRepo(parsed.repo);
+                if (parsed.prNumber) props.setNumber(parsed.prNumber);
+              } else {
+                props.setNumber(val.replace(/\D/g, "").replace(/^0+/, ""));
+              }
+            }}
             aria-invalid={props.number.length > 0 && !props.prNumberValid}
           />
           <button onClick={props.lookup} disabled={!props.canSearch} title="Search reviews">
@@ -427,14 +563,49 @@ function ReviewsView(props: {
               </button>
             ))}
           </div>
-          <ReviewDetail review={props.selectedReview} />
+          <ReviewDetail review={props.selectedReview} onPipelineNodeClick={props.onPipelineNodeClick} />
         </div>
       )}
     </section>
   );
 }
 
-function ReviewDetail({ review }: { review: Review | null }) {
+function ReviewDetail({ review, onPipelineNodeClick }: { review: Review | null; onPipelineNodeClick?: (agent: string, reviewId: number) => void }) {
+  const [severityFilter, setSeverityFilter] = useState("all");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [sortBy, setSortBy] = useState("severity");
+
+  const severityWeight = (sev: string) => {
+    switch (sev.toLowerCase()) {
+      case "critical": return 5;
+      case "high": return 4;
+      case "medium": return 3;
+      case "low": return 2;
+      case "info": return 1;
+      default: return 0;
+    }
+  };
+
+  const filteredAndSortedFindings = useMemo(() => {
+    let list = [...(review?.findings ?? [])];
+    if (severityFilter !== "all") {
+      list = list.filter((f) => f.severity.toLowerCase() === severityFilter.toLowerCase());
+    }
+    if (categoryFilter !== "all") {
+      list = list.filter((f) => f.category.toLowerCase() === categoryFilter.toLowerCase());
+    }
+    list.sort((a, b) => {
+      if (sortBy === "severity") {
+        return severityWeight(b.severity) - severityWeight(a.severity);
+      }
+      if (sortBy === "line") {
+        return (a.line ?? 0) - (b.line ?? 0);
+      }
+      return 0;
+    });
+    return list;
+  }, [review?.findings, severityFilter, categoryFilter, sortBy]);
+
   if (!review) {
     return (
       <aside className="detail-panel">
@@ -443,6 +614,7 @@ function ReviewDetail({ review }: { review: Review | null }) {
       </aside>
     );
   }
+
   return (
     <aside className="detail-panel">
       <h2>{review.full_name} #{review.number}</h2>
@@ -452,7 +624,12 @@ function ReviewDetail({ review }: { review: Review | null }) {
         <h3>Analysis Pipeline</h3>
         <div className="timeline-flow">
           {(review.agent_runs ?? []).map((run) => (
-            <div className={`timeline-node ${run.status}`} key={run.agent}>
+            <button
+              className={`timeline-node ${run.status}`}
+              key={run.agent}
+              onClick={() => onPipelineNodeClick?.(run.agent, review.id)}
+              style={{ background: "transparent", border: 0, textAlign: "left", cursor: "pointer", width: "100%", padding: 0 }}
+            >
               <div className="node-icon" />
               <div className="node-content">
                 <span className="node-agent">{run.agent}</span>
@@ -462,15 +639,35 @@ function ReviewDetail({ review }: { review: Review | null }) {
                 </small>
                 {run.error && <p className="node-error">{run.error}</p>}
               </div>
-            </div>
+            </button>
           ))}
         </div>
       </div>
 
       <div className="finding-list">
         <h3>Findings List</h3>
-        {(review.findings ?? []).length === 0 ? <p className="muted">No findings recorded for this review.</p> : null}
-        {(review.findings ?? []).map((finding) => (
+        <div className="finding-list-controls">
+          <select className="filter-select" value={severityFilter} onChange={(e) => setSeverityFilter(e.target.value)}>
+            <option value="all">All Severities</option>
+            <option value="critical">Critical</option>
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
+            <option value="info">Info</option>
+          </select>
+          <select className="filter-select" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
+            <option value="all">All Categories</option>
+            <option value="security">Security</option>
+            <option value="performance">Performance</option>
+            <option value="style">Style</option>
+          </select>
+          <select className="filter-select" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
+            <option value="severity">Sort by Severity</option>
+            <option value="line">Sort by Line Number</option>
+          </select>
+        </div>
+        {filteredAndSortedFindings.length === 0 ? <p className="muted">No matching findings recorded for this review.</p> : null}
+        {filteredAndSortedFindings.map((finding) => (
           <article className="finding-card" key={finding.id}>
             <div className="finding-top">
               <span className={`severity ${finding.severity}`}>{finding.severity}</span>
@@ -505,10 +702,12 @@ function ReviewDetail({ review }: { review: Review | null }) {
   );
 }
 
-function AgentsView({ agentRuns, initialFetching, setActiveTab }: {
+function AgentsView({ agentRuns, initialFetching, setActiveTab, onRunClick, highlightedRunKey }: {
   agentRuns: AgentRun[];
   initialFetching: boolean;
   setActiveTab: (tab: Tab) => void;
+  onRunClick: (fullName: string, prNumber: number) => void;
+  highlightedRunKey: string | null;
 }) {
   if (initialFetching) {
     return (
@@ -557,7 +756,11 @@ function AgentsView({ agentRuns, initialFetching, setActiveTab }: {
           <div>Outcome</div>
         </div>
         {agentRuns.map((run) => (
-          <div className="row agent-runs-row" key={`${run.review_id}-${run.agent}`}>
+          <button
+            className={`row agent-runs-row row-button ${highlightedRunKey === `${run.review_id}-${run.agent}` ? "highlighted" : ""}`}
+            key={`${run.review_id}-${run.agent}`}
+            onClick={() => onRunClick(run.full_name ?? "", run.number ?? 0)}
+          >
             <div>
               <span className={`agent-chip ${run.agent}`}>{run.agent}</span>
             </div>
@@ -574,7 +777,7 @@ function AgentsView({ agentRuns, initialFetching, setActiveTab }: {
                 {run.status === "completed" ? `${run.finding_count ?? 0} findings` : run.status}
               </span>
             </div>
-          </div>
+          </button>
         ))}
       </div>
     </section>
@@ -617,42 +820,67 @@ function QueueView({ queue, initialFetching, handleRetry, retryingJobId }: {
           </div>
         ) : null}
         {queue.jobs.map((job) => (
-          <div className="row queue-row" key={job.id}>
-            <div>
-              <div className={badgeClass(job.state)}>{job.state}</div>
-              {job.state === "failed" && (
-                <button
-                  className="retry-btn"
-                  onClick={() => handleRetry(String(job.id))}
-                  disabled={retryingJobId === String(job.id)}
-                >
-                  {retryingJobId === String(job.id) ? "Retrying..." : "Retry"}
-                </button>
-              )}
-            </div>
-            <div>
-              <strong>{job.repository ?? "unknown"}</strong>
-              {job.pullNumber ? ` #${job.pullNumber}` : ""}
-              {job.state === "failed" && job.failedReason && (
-                <div className="job-error-msg">{job.failedReason}</div>
-              )}
-            </div>
-            <div>{job.eventName ?? "review"}</div>
-            <div>{job.attemptsMade ?? 0}</div>
-          </div>
+          <QueueRow
+            key={job.id}
+            job={job}
+            handleRetry={handleRetry}
+            retryingJobId={retryingJobId}
+          />
         ))}
       </div>
     </section>
   );
 }
 
-function ConnectView({ connectState, repositoryToIndex, setRepositoryToIndex, startIndexing, user, initialFetching }: {
+function QueueRow({ job, handleRetry, retryingJobId }: {
+  job: any;
+  handleRetry: (jobId: string) => Promise<void>;
+  retryingJobId: string | null;
+}) {
+  const [showError, setShowError] = useState(false);
+  const isStale = job.state === "failed" && job.failedReason?.includes("installation");
+  return (
+    <div className="row queue-row">
+      <div>
+        <div className={badgeClass(isStale ? "stale" : job.state)}>
+          {isStale ? "Stale / Unrecoverable" : job.state}
+        </div>
+        {job.state === "failed" && (
+          <button
+            className="retry-btn"
+            onClick={() => handleRetry(String(job.id))}
+            disabled={retryingJobId === String(job.id) || isStale}
+          >
+            {retryingJobId === String(job.id) ? "Retrying..." : "Retry"}
+          </button>
+        )}
+      </div>
+      <div>
+        <strong>{job.repository ?? "unknown"}</strong>
+        {job.pullNumber ? ` #${job.pullNumber}` : ""}
+        {job.state === "failed" && job.failedReason && (
+          <div className="job-error-container">
+            <button className="toggle-error-btn" onClick={() => setShowError(!showError)}>
+              {showError ? "Hide error" : "View error"}
+            </button>
+            {showError && <div className="job-error-msg">{job.failedReason}</div>}
+          </div>
+        )}
+      </div>
+      <div>{job.eventName ?? "review"}</div>
+      <div>{job.attemptsMade ?? 0}</div>
+    </div>
+  );
+}
+
+function ConnectView({ connectState, repositoryToIndex, setRepositoryToIndex, startIndexing, user, initialFetching, onReindex }: {
   connectState: ConnectState | null;
   repositoryToIndex: string;
   setRepositoryToIndex: (value: string) => void;
   startIndexing: () => void;
   user: any;
   initialFetching: boolean;
+  onReindex: (repoName: string) => void;
 }) {
   if (initialFetching) {
     return (
@@ -689,7 +917,19 @@ function ConnectView({ connectState, repositoryToIndex, setRepositoryToIndex, st
         <div className="connect-panel">
           <h3>Index codebase</h3>
           <div className="lookup compact">
-            <input placeholder="owner/repo" value={repositoryToIndex} onChange={(event) => setRepositoryToIndex(event.target.value)} />
+            <input
+              placeholder="owner/repo"
+              value={repositoryToIndex}
+              onChange={(event) => {
+                const val = event.target.value;
+                const parsed = parseGitHubUrl(val);
+                if (parsed && (val.includes("/") || val.includes("github.com"))) {
+                  setRepositoryToIndex(`${parsed.owner}/${parsed.repo}`);
+                } else {
+                  setRepositoryToIndex(val);
+                }
+              }}
+            />
             <button onClick={startIndexing} disabled={!/^[\w.-]+\/[\w.-]+$/.test(repositoryToIndex)}><RefreshCw size={16} />Index</button>
           </div>
         </div>
@@ -697,9 +937,14 @@ function ConnectView({ connectState, repositoryToIndex, setRepositoryToIndex, st
       <div className="run-list">
         {(connectState?.indexingJobs ?? []).map((job) => (
           <article className="run-card" key={job.id}>
-            <strong>{job.repository_full_name}</strong>
+            <div className="connect-job-header">
+              <strong>{job.repository_full_name}</strong>
+              <button className="reindex-btn" onClick={() => onReindex(job.repository_full_name)}>
+                <RefreshCw size={12} /> Re-index
+              </button>
+            </div>
             <div className="progress-track"><span style={{ width: `${job.chunks ? Math.min(100, (job.embedded / job.chunks) * 100) : 12}%` }} /></div>
-            <p className="muted">{job.status} · {job.embedded}/{job.chunks} embedded</p>
+            <p className="muted">{job.status} · {job.embedded}/{job.chunks} embedded · {formatRelativeTime(job.created_at)}</p>
           </article>
         ))}
       </div>
@@ -707,13 +952,14 @@ function ConnectView({ connectState, repositoryToIndex, setRepositoryToIndex, st
   );
 }
 
-function Metric({ label, value, trend, trendColor, isAlert, hasTooltip }: {
+function Metric({ label, value, trend, trendColor, isAlert, hasTooltip, history }: {
   label: string;
   value: string | number;
   trend?: string;
   trendColor?: string;
   isAlert?: boolean;
   hasTooltip?: boolean;
+  history?: number[];
 }) {
   return (
     <div className={`metric ${isAlert ? "alert" : ""}`}>
@@ -739,18 +985,65 @@ function Metric({ label, value, trend, trendColor, isAlert, hasTooltip }: {
       </div>
       <div className="metric-value-row">
         <div className="metric-value">{value}</div>
-        {trend && (
-          <span className="metric-trend" style={{ color: trendColor }}>
-            {trend}
-          </span>
-        )}
+        <div className="metric-trend-sparkline">
+          {history && <Sparkline data={history} />}
+          {trend && (
+            <span className="metric-trend" style={{ color: trendColor }}>
+              {trend}
+            </span>
+          )}
+        </div>
       </div>
     </div>
   );
 }
 
+function Sparkline({ data }: { data?: number[] }) {
+  if (!data || data.length < 2) return null;
+  const max = Math.max(...data, 1);
+  const min = Math.min(...data, 0);
+  const range = max - min;
+  const width = 80;
+  const height = 24;
+  const points = data
+    .map((val, idx) => {
+      const x = (idx / (data.length - 1)) * width;
+      const y = height - ((val - min) / range) * height;
+      return `${x},${y}`;
+    })
+    .join(" ");
+
+  return (
+    <svg width={width} height={height} className="sparkline">
+      <polyline
+        fill="none"
+        stroke="var(--green)"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        points={points}
+      />
+    </svg>
+  );
+}
+
 function badgeClass(status: string) {
-  if (status === "failed") return "badge failed";
+  if (status === "failed" || status === "stale") return "badge failed";
   if (status === "active" || status === "in_progress" || status === "running" || status === "waiting") return "badge running";
   return "badge";
+}
+
+function formatRelativeTime(dateString: string) {
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffSec = Math.floor(diffMs / 1000);
+  const diffMin = Math.floor(diffSec / 60);
+  const diffHr = Math.floor(diffMin / 60);
+  const diffDay = Math.floor(diffHr / 24);
+
+  if (diffSec < 60) return "just now";
+  if (diffMin < 60) return `${diffMin}m ago`;
+  if (diffHr < 24) return `${diffHr}h ago`;
+  return `${diffDay}d ago`;
 }

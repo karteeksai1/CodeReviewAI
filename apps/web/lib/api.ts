@@ -73,6 +73,10 @@ export type DashboardStats = {
   highDelta?: number;
   latestRisk: string | number;
   previousRisk?: number;
+  reviewsHistory?: number[];
+  findingsHistory?: number[];
+  highHistory?: number[];
+  riskHistory?: number[];
 };
 
 export type ConnectState = {
@@ -230,3 +234,23 @@ export async function retryJob(id: string, token: string) {
   if (!response.ok) throw new Error(await parseError(response, "Retry job failed"));
   return response.json();
 }
+
+export function parseGitHubUrl(url: string): { owner: string; repo: string; prNumber?: string } | null {
+  const clean = url.trim().replace(/\/$/, "");
+  const withoutProtocol = clean.replace(/^(https?:\/\/)?(www\.)?github\.com\//i, "");
+  const parts = withoutProtocol.split("/");
+  if (parts.length >= 2) {
+    const owner = parts[0];
+    let repo = parts[1];
+    if (repo.endsWith(".git")) {
+      repo = repo.slice(0, -4);
+    }
+    let prNumber: string | undefined;
+    if (parts[2] === "pull" && parts[3]) {
+      prNumber = parts[3];
+    }
+    return { owner, repo, prNumber };
+  }
+  return null;
+}
+

@@ -40,3 +40,11 @@ function isInternalError(err) {
   const message = String(err?.message ?? "");
   return DATABASE_ERROR_CODES.has(err?.code) || INTERNAL_ERROR_PATTERNS.some((pattern) => pattern.test(message));
 }
+
+export class MissingInstallationIdError extends Error {
+  constructor(message = "Missing installation ID on payload") {
+    super(message);
+    this.name = "MissingInstallationIdError";
+    this.statusCode = 400;
+  }
+}

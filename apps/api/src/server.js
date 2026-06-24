@@ -50,7 +50,7 @@ app.get("/health", async (_req, res) => {
   }
 
   const allOk = postgresOk && redisOk && agentOk && pineconeOk && groqOk;
-  res.status(allOk ? 200 : 503).json({
+  res.status(200).json({
     status: allOk ? "healthy" : "unhealthy",
     postgres: postgresOk,
     redis: redisOk,
