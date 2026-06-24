@@ -146,11 +146,12 @@ export async function fetchAuthConfig() {
   return (await response.json()) as { googleClientId: string | null };
 }
 
-export async function loginWithGoogleToken(token: string) {
+export async function loginWithGoogleToken(tokenOrCode: string) {
+  const isCode = !tokenOrCode.includes(".");
   const response = await fetch(`${API_URL}/auth/google`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ token })
+    body: JSON.stringify(isCode ? { code: tokenOrCode } : { token: tokenOrCode })
   });
   if (!response.ok) throw new Error(await parseError(response, "Google login failed"));
   return (await response.json()) as { token: string; user: AuthUser };

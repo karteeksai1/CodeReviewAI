@@ -33,13 +33,6 @@ export default function LandingPage() {
     fetchAuthConfig()
       .then((cfg) => {
         setGoogleClientId(cfg.googleClientId);
-        if (cfg.googleClientId) {
-          const script = document.createElement("script");
-          script.src = "https://accounts.google.com/gsi/client";
-          script.async = true;
-          script.defer = true;
-          document.head.appendChild(script);
-        }
       })
       .catch(() => {});
   }, []);
@@ -63,31 +56,14 @@ export default function LandingPage() {
     }
   };
 
-  const handleGoogleLogin = async () => {
+  const handleGoogleLogin = () => {
     if (!googleClientId) {
       setError("Google Sign-In is not configured. Please set GOOGLE_CLIENT_ID in the .env file.");
       return;
     }
-    setSubmitting(true);
-    setError(null);
-    try {
-      window.google.accounts.id.initialize({
-        client_id: googleClientId,
-        callback: async (response: any) => {
-          try {
-            await loginWithGoogle(response.credential);
-            router.replace("/dashboard");
-          } catch (err) {
-            setError(err instanceof Error ? err.message : "Google login failed");
-            setSubmitting(false);
-          }
-        }
-      });
-      window.google.accounts.id.prompt();
-    } catch (err) {
-      setError("Google Sign-In failed to load. Please try again.");
-      setSubmitting(false);
-    }
+    const redirectUri = "http://localhost:3000/api/auth/callback/google";
+    const url = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${googleClientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=openid%20email%20profile`;
+    window.location.href = url;
   };
 
   const handleDashboardRedirect = () => {

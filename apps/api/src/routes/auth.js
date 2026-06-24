@@ -83,13 +83,35 @@ authRouter.get("/config", (req, res) => {
 
 authRouter.post("/google", async (req, res, next) => {
   try {
-    const { token } = req.body ?? {};
-    if (!token) {
-      res.status(400).json({ error: "Google ID token (token) is required" });
+    const { token, code } = req.body ?? {};
+    if (!token && !code) {
+      res.status(400).json({ error: "Google ID token (token) or authorization code (code) is required" });
       return;
     }
 
-    const response = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(token)}`);
+    let idToken = token;
+    if (code) {
+      const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          code,
+          client_id: config.googleClientId,
+          client_secret: process.env.GOOGLE_CLIENT_SECRET || "",
+          redirect_uri: "http://localhost:3000/api/auth/callback/google",
+          grant_type: "authorization_code"
+        })
+      });
+      if (!tokenResponse.ok) {
+        const errorText = await tokenResponse.text();
+        res.status(401).json({ error: "Failed to exchange authorization code: " + errorText });
+        return;
+      }
+      const tokenData = await tokenResponse.json();
+      idToken = tokenData.id_token;
+    }
+
+    const response = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`);
     if (!response.ok) {
       res.status(401).json({ error: "Invalid Google ID token" });
       return;
