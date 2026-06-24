@@ -74,10 +74,6 @@ export default function LandingPage() {
         <div className="hero-visual">
           <div className="hero-logo-mark">✱</div>
           <img src="/hero-bg.jpg" className="hero-image" alt="Background" loading="eager" />
-          <div className="hero-text-overlay">
-            <h1 className="hero-overlay-title">Catch what humans miss in pull requests.</h1>
-            <p className="hero-overlay-sub">Speed, depth, and parallel multi-agent codebase review.</p>
-          </div>
         </div>
 
         <div className="hero-panel">
