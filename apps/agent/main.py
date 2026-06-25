@@ -146,7 +146,7 @@ async def warmup():
     from llm.groq import groq_json
     async def _do_warmup():
         try:
-            await groq_json("Ping", "Ping")
+            await groq_json("Ping", "Ping", is_warmup=True)
         except Exception:
             pass
     asyncio.create_task(_do_warmup())

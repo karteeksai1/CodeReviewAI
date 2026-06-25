@@ -52,7 +52,11 @@ async def _groq_security_findings(state, context_str):
     system = (
         "You are CodeReviewAI's security reviewer. Return JSON only with a findings array. "
         "Each finding must include category, severity, title, body, path, line, confidence. "
-        "Focus on exploitable auth, injection, secret, permission, data exposure, and supply-chain risks."
+        "Focus on exploitable auth, injection, secret, permission, data exposure, and supply-chain risks. "
+        "Strict Precision Rules: "
+        "1. Do NOT emit a finding if your analysis concludes the issue does not apply, is not present, or is not applicable. Only emit findings for issues actually identified in the code. "
+        "2. Do NOT emit hypothetical or generic findings (e.g. 'code is not thread-safe' or 'stores data in memory') unless you have concrete justification grounded in the actual code/diff showing a real, material risk. "
+        "3. Do NOT double-count issues already flagged or primarily belonging to other categories (like performance or style). Focus strictly on security-relevant aspects."
     )
     user = (
         f"Repository: {state.get('repository', {}).get('fullName')}\n"

@@ -113,6 +113,7 @@ export async function initDb() {
   await query(`
     alter table repositories add column if not exists user_id bigint references users(id);
     alter table indexing_jobs add column if not exists user_id bigint references users(id);
+    create unique index if not exists findings_unique_idx on findings (review_id, category, severity, (coalesce(path, '')), (coalesce(line, 0)), title);
   `);
 
   await seedDefaultAdmin();
@@ -187,7 +188,8 @@ export async function insertFindings(reviewId, findings = []) {
   for (const finding of findings) {
     await query(
       `insert into findings (review_id, category, severity, title, body, path, line, confidence, metadata)
-       values ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+       on conflict (review_id, category, severity, (coalesce(path, '')), (coalesce(line, 0)), title) do nothing`,
       [reviewId, finding.category, finding.severity, finding.title, finding.body, finding.path, finding.line, finding.confidence, JSON.stringify(finding.metadata ?? {})]
     );
   }

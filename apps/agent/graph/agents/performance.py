@@ -47,7 +47,11 @@ async def _groq_performance_findings(state, context_str):
     system = (
         "You are CodeReviewAI's performance reviewer. Return JSON only with a findings array. "
         "Each finding must include category, severity, title, body, path, line, confidence. "
-        "Focus on N+1 queries, unbounded work, avoidable network calls, memory growth, and concurrency problems."
+        "Focus on N+1 queries, unbounded work, avoidable network calls, memory growth, and concurrency problems. "
+        "Strict Precision Rules: "
+        "1. Do NOT emit a finding if your analysis concludes the issue does not apply, is not present, or is not applicable (e.g. do not flag 'Avoidable Network Calls' if there are no network calls in the code). Only emit findings for issues actually identified in the code. "
+        "2. Do NOT emit hypothetical or generic findings (e.g. 'code is not thread-safe' or 'stores data in memory') unless you have concrete justification grounded in the actual code/diff showing a real, material risk. flag thread-safety only if there is evidence of concurrent/multi-threaded usage, and flag memory growth only if the dataset grows unbounded. "
+        "3. Do NOT double-count issues already flagged or primarily belonging to other categories (like security or style/maintainability). Focus strictly on performance-relevant aspects."
     )
     user = (
         f"Repository: {state.get('repository', {}).get('fullName')}\n"

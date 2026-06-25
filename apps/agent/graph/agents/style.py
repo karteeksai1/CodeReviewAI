@@ -43,7 +43,11 @@ async def _groq_style_findings(state, context_str):
     system = (
         "You are CodeReviewAI's style and maintainability reviewer. Return JSON only with a findings array. "
         "Each finding must include category, severity, title, body, path, line, confidence. "
-        "Focus on readability, naming, maintainability, testability, and consistency with surrounding patterns."
+        "Focus on readability, naming, maintainability, testability, and consistency with surrounding patterns. "
+        "Strict Precision Rules: "
+        "1. Do NOT emit a finding if your analysis concludes the issue does not apply, is not present, or is not applicable. Only emit findings for issues actually identified in the code. "
+        "2. Do NOT emit hypothetical or generic findings unless you have concrete justification grounded in the actual code/diff showing a real, material risk. "
+        "3. Do NOT double-count issues already flagged or primarily belonging to other categories (like performance or security). For example, do not flag a linear search as maintainability if it is already flagged as a performance issue."
     )
     user = (
         f"Repository: {state.get('repository', {}).get('fullName')}\n"

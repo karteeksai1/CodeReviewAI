@@ -713,6 +713,7 @@ function ReviewDetail({ review, onPipelineNodeClick }: { review: Review | null; 
               key={run.agent}
               onClick={() => onPipelineNodeClick?.(run.agent, review.id)}
               style={{ background: "transparent", border: 0, textAlign: "left", cursor: "pointer", width: "100%", padding: 0 }}
+              title={run.status === "skipped" ? `Supervisor determined the diff contains no ${run.agent}-relevant changes.` : undefined}
             >
               <div className="node-icon" />
               <div className="node-content">
@@ -721,6 +722,11 @@ function ReviewDetail({ review, onPipelineNodeClick }: { review: Review | null; 
                   {run.duration_ms ? `${(run.duration_ms / 1000).toFixed(2)}s` : "running"}
                   {run.status === "completed" ? ` · ${run.finding_count} findings` : ` · ${run.status}`}
                 </small>
+                {run.status === "skipped" && (
+                  <p className="node-skip-reason" style={{ margin: "4px 0 0", fontSize: "11px", color: "var(--muted)" }}>
+                    Supervisor determined the diff contains no {run.agent}-relevant changes.
+                  </p>
+                )}
                 {run.error && <p className="node-error">{run.error}</p>}
               </div>
             </button>
@@ -1231,6 +1237,7 @@ function Sparkline({ data }: { data?: number[] }) {
 function badgeClass(status: string) {
   if (status === "failed" || status === "stale") return "badge failed";
   if (status === "active" || status === "in_progress" || status === "running" || status === "waiting") return "badge running";
+  if (status === "skipped") return "badge skipped";
   return "badge";
 }
 

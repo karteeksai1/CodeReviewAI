@@ -56,12 +56,12 @@ def groq_enabled() -> bool:
     return bool(os.getenv("GROQ_API_KEY"))
 
 
-async def groq_json(system: str, user: str, *, temperature: float = 0.1) -> dict[str, Any]:
+async def groq_json(system: str, user: str, *, temperature: float = 0.1, is_warmup: bool = False) -> dict[str, Any]:
     api_key = os.getenv("GROQ_API_KEY")
     if not api_key:
         return {}
 
-    is_real_run = bool(request_id_var.get())
+    is_real_run = not is_warmup
     if is_real_run:
         await increment_groq_calls()
 
