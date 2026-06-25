@@ -13,7 +13,7 @@ from fastapi import FastAPI, Request
 from pydantic import BaseModel, Field
 
 from graph.supervisor import run_review
-from rag.indexer import index_repository, get_pinecone
+from rag import index_repository, get_pinecone
 from llm.groq import request_id_var, token_usage_var
 
 structlog.configure(

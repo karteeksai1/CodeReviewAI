@@ -3,7 +3,7 @@ import re
 
 from graph.agents.common import finding, iter_added_lines
 from llm.groq import diff_excerpt, groq_json, normalize_findings
-from rag.retriever import retrieve_context
+from rag import retrieve_context
 
 SECRET_PATTERNS = [
     re.compile(r"(?i)(api[_-]?key|secret|token|password)\s*[:=]\s*['\"][^'\"]{8,}['\"]"),
