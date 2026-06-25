@@ -124,6 +124,17 @@ export default function LandingPage() {
               <path d="M 600 -80 L 100 520" stroke="#ffffff" strokeWidth="8" opacity="0.4" strokeLinecap="round" />
               <path d="M 900 0 L 400 750" stroke="#52b788" strokeWidth="75" opacity="0.3" strokeLinecap="round" />
             </g>
+            <g className="animated-streaks">
+              <path d="M 900 -50 L 400 700" stroke="#ffffff" strokeWidth="2" opacity="0.25" strokeLinecap="round" />
+              <path d="M 800 -100 L 300 650" stroke="#74c69d" strokeWidth="4" opacity="0.2" strokeLinecap="round" />
+              <path d="M 1100 150 L 600 900" stroke="#1b4332" strokeWidth="32" opacity="0.35" strokeLinecap="round" />
+              <path d="M 750 -150 L 250 600" stroke="#52b788" strokeWidth="12" opacity="0.15" strokeLinecap="round" />
+              <path d="M 650 -50 L 150 700" stroke="#ffffff" strokeWidth="1.5" opacity="0.3" strokeLinecap="round" />
+              <path d="M 1000 50 L 500 800" stroke="#2d6a4f" strokeWidth="18" opacity="0.2" strokeLinecap="round" />
+              <path d="M 700 -200 L 200 550" stroke="#d8f3dc" strokeWidth="1" opacity="0.4" strokeLinecap="round" />
+              <path d="M 850 100 L 350 850" stroke="#ffffff" strokeWidth="6" opacity="0.15" strokeLinecap="round" />
+              <path d="M 550 -250 L 50 500" stroke="#52b788" strokeWidth="24" opacity="0.12" strokeLinecap="round" />
+            </g>
           </svg>
           <div className="hero-text-overlay">
             <h1 className="hero-overlay-title">Catch what humans miss.</h1>
