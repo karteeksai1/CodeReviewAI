@@ -11,6 +11,47 @@ request_id_var = contextvars.ContextVar("request_id", default="")
 token_usage_var = contextvars.ContextVar("token_usage", default=0)
 
 
+in_flight_groq_calls = 0
+in_flight_lock = None
+
+
+async def report_status(service: str, status: str):
+    try:
+        import os
+        api_url = os.getenv("PUBLIC_API_URL", "http://localhost:3001")
+        async with httpx.AsyncClient() as client:
+            await client.post(
+                f"{api_url}/health/status",
+                json={"service": service, "status": status},
+                timeout=1.0
+            )
+    except Exception:
+        pass
+
+
+async def increment_groq_calls():
+    global in_flight_groq_calls, in_flight_lock
+    import asyncio
+    if in_flight_lock is None:
+        in_flight_lock = asyncio.Lock()
+    async with in_flight_lock:
+        in_flight_groq_calls += 1
+        if in_flight_groq_calls == 1:
+            await report_status("llm", "checking")
+
+
+async def decrement_groq_calls(success=True):
+    global in_flight_groq_calls, in_flight_lock
+    import asyncio
+    if in_flight_lock is None:
+        in_flight_lock = asyncio.Lock()
+    async with in_flight_lock:
+        if in_flight_groq_calls > 0:
+            in_flight_groq_calls -= 1
+            if in_flight_groq_calls == 0:
+                await report_status("llm", "ok" if success else "down")
+
+
 def groq_enabled() -> bool:
     return bool(os.getenv("GROQ_API_KEY"))
 
@@ -20,32 +61,46 @@ async def groq_json(system: str, user: str, *, temperature: float = 0.1) -> dict
     if not api_key:
         return {}
 
-    payload = {
-        "model": os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
-        "temperature": temperature,
-        "response_format": {"type": "json_object"},
-        "messages": [
-            {"role": "system", "content": system},
-            {"role": "user", "content": user},
-        ],
-    }
-    timeout = httpx.Timeout(float(os.getenv("GROQ_TIMEOUT_SECONDS", "30")))
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        response = await client.post(
-            GROQ_CHAT_URL,
-            headers={"authorization": f"Bearer {api_key}", "content-type": "application/json"},
-            json=payload,
-        )
-        response.raise_for_status()
-    res_data = response.json()
-    usage = res_data.get("usage", {})
-    tokens = usage.get("total_tokens", 0)
-    token_usage_var.set(token_usage_var.get() + tokens)
-    content = res_data["choices"][0]["message"]["content"]
+    is_real_run = bool(request_id_var.get())
+    if is_real_run:
+        await increment_groq_calls()
+
+    success = False
     try:
-        return json.loads(content)
-    except json.JSONDecodeError:
-        return {}
+        payload = {
+            "model": os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
+            "temperature": temperature,
+            "response_format": {"type": "json_object"},
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+        }
+        timeout = httpx.Timeout(float(os.getenv("GROQ_TIMEOUT_SECONDS", "30")))
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.post(
+                GROQ_CHAT_URL,
+                headers={"authorization": f"Bearer {api_key}", "content-type": "application/json"},
+                json=payload,
+            )
+            response.raise_for_status()
+        res_data = response.json()
+        usage = res_data.get("usage", {})
+        tokens = usage.get("total_tokens", 0)
+        token_usage_var.set(token_usage_var.get() + tokens)
+        content = res_data["choices"][0]["message"]["content"]
+        try:
+            success = True
+            return json.loads(content)
+        except json.JSONDecodeError:
+            return {}
+    except Exception as e:
+        if is_real_run:
+            await report_status("llm", "down")
+        raise e
+    finally:
+        if is_real_run:
+            await decrement_groq_calls(success)
 
 
 def diff_excerpt(files: list[dict[str, Any]], *, max_chars: int = 9000) -> str:

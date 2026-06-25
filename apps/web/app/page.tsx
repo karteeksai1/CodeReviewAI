@@ -125,7 +125,7 @@ export default function LandingPage() {
             </g>
           </svg>
           <div className="hero-text-overlay">
-            <h1 className="hero-overlay-title">Catch what humans miss.</h1>
+            <h1 className="hero-overlay-title">Bugs don't take coffee breaks.</h1>
           </div>
         </div>
 

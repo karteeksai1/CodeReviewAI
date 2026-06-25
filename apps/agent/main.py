@@ -1,5 +1,6 @@
 import os
 import time
+import asyncio
 from pathlib import Path
 import httpx
 import structlog
@@ -101,6 +102,44 @@ async def health():
     }
 
 
+in_flight_indexing = 0
+indexing_lock = None
+
+
+async def report_status(service: str, status: str):
+    try:
+        api_url = os.getenv("PUBLIC_API_URL", "http://localhost:3001")
+        async with httpx.AsyncClient() as client:
+            await client.post(
+                f"{api_url}/health/status",
+                json={"service": service, "status": status},
+                timeout=1.0
+            )
+    except Exception:
+        pass
+
+
+async def increment_indexing():
+    global in_flight_indexing, indexing_lock
+    if indexing_lock is None:
+        indexing_lock = asyncio.Lock()
+    async with indexing_lock:
+        in_flight_indexing += 1
+        if in_flight_indexing == 1:
+            await report_status("rag", "checking")
+
+
+async def decrement_indexing(success=True):
+    global in_flight_indexing, indexing_lock
+    if indexing_lock is None:
+        indexing_lock = asyncio.Lock()
+    async with indexing_lock:
+        if in_flight_indexing > 0:
+            in_flight_indexing -= 1
+            if in_flight_indexing == 0:
+                await report_status("rag", "ok" if success else "down")
+
+
 @app.post("/warmup")
 async def warmup():
     import asyncio
@@ -148,6 +187,8 @@ async def index(request: IndexRequest, req: Request):
     req_id = req.headers.get("x-request-id", "unknown-request-id")
     request_id_var.set(req_id)
     start_time = time.perf_counter()
+    await increment_indexing()
+    success = False
     try:
         result = await index_repository(request.repo_path, request.namespace)
         latency = int((time.perf_counter() - start_time) * 1000)
@@ -157,6 +198,7 @@ async def index(request: IndexRequest, req: Request):
             latency_ms=latency,
             namespace=request.namespace
         )
+        success = True
         return result
     except Exception as e:
         latency = int((time.perf_counter() - start_time) * 1000)
@@ -167,3 +209,5 @@ async def index(request: IndexRequest, req: Request):
             error=str(e)
         )
         raise e
+    finally:
+        await decrement_indexing(success)

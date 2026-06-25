@@ -47,11 +47,11 @@ export default function Home() {
   const [healthStatus, setHealthStatus] = useState<"checking" | "ok" | "down">("checking");
   const [isCheckingHealth, setIsCheckingHealth] = useState(true);
   const [healthDetails, setHealthDetails] = useState<{
-    postgres: boolean;
-    redis: boolean;
-    agent: boolean;
-    pinecone: boolean;
-    groq: boolean;
+    postgres: string | boolean;
+    redis: string | boolean;
+    agent: string | boolean;
+    pinecone: string | boolean;
+    groq: string | boolean;
   } | null>(null);
   const [owner, setOwner] = useState("");
   const [repo, setRepo] = useState("");
@@ -347,6 +347,26 @@ export default function Home() {
     );
   }
 
+  const getServiceStatus = (serviceKey: string, serviceName: string, statusVal: string | boolean | undefined) => {
+    const current = isCheckingHealth ? "checking" : (statusVal ?? "unknown");
+    let stateWord = "unknown";
+    let cssClass = "unknown";
+    if (current === "checking") {
+      stateWord = (serviceKey === "pinecone" || serviceKey === "groq") ? "processing" : "checking";
+      cssClass = "checking";
+    } else if (current === "ok" || current === true) {
+      stateWord = "operational";
+      cssClass = "ok";
+    } else if (current === "down" || current === false) {
+      stateWord = "down";
+      cssClass = "down";
+    }
+    return {
+      title: `${serviceName}: ${stateWord}`,
+      cssClass
+    };
+  };
+
   return (
     <main className="shell">
       <aside className="sidebar">
@@ -356,15 +376,16 @@ export default function Home() {
           <NavButton tab="agents" activeTab={activeTab} setActiveTab={switchTab} icon={<Activity size={18} />} label="Agents" />
           <NavButton tab="queue" activeTab={activeTab} setActiveTab={switchTab} icon={<RefreshCw size={18} />} label="Queue" badge={failedCount > 0 ? failedCount : undefined} badgeAlert={failedCount > 0} />
           <NavButton tab="connect" activeTab={activeTab} setActiveTab={switchTab} icon={<GitBranch size={18} />} label="Connect" />
+          <button className="nav-item logout-nav-item" onClick={() => { logout(); router.replace("/"); }}>
+            <LogOut size={18} />
+            <span>Sign out</span>
+          </button>
         </nav>
         <div className="sidebar-footer">
           <div className="user-email">
             {user.email}
             {user.isAdmin && <span className="admin-tag">Admin</span>}
           </div>
-          <button className="logout-button" onClick={() => { logout(); router.replace("/"); }}>
-            <LogOut size={16} />Sign out
-          </button>
         </div>
       </aside>
 
@@ -376,25 +397,25 @@ export default function Home() {
           </div>
           <div className="status health-status-container">
             <span className="health-label">Services:</span>
-            <div className="health-micro-badge" title="Neon Postgres Connection">
-              <span className={`dot ${isCheckingHealth ? "checking" : healthDetails?.postgres ? "ok" : "down"}`} />
-              <span>DB ({isCheckingHealth ? "checking" : healthDetails?.postgres ? "ok" : "down"})</span>
+            <div className="health-micro-badge" title={getServiceStatus("postgres", "Database", healthDetails?.postgres).title} aria-label={getServiceStatus("postgres", "Database", healthDetails?.postgres).title}>
+              <span className={`dot ${getServiceStatus("postgres", "Database", healthDetails?.postgres).cssClass}`} />
+              <span>DB</span>
             </div>
-            <div className="health-micro-badge" title="Redis / BullMQ Queue Connection">
-              <span className={`dot ${isCheckingHealth ? "checking" : healthDetails?.redis ? "ok" : "down"}`} />
-              <span>Queue ({isCheckingHealth ? "checking" : healthDetails?.redis ? "ok" : "down"})</span>
+            <div className="health-micro-badge" title={getServiceStatus("redis", "Queue", healthDetails?.redis).title} aria-label={getServiceStatus("redis", "Queue", healthDetails?.redis).title}>
+              <span className={`dot ${getServiceStatus("redis", "Queue", healthDetails?.redis).cssClass}`} />
+              <span>Queue</span>
             </div>
-            <div className="health-micro-badge" title="FastAPI Agent Bridge Connection">
-              <span className={`dot ${isCheckingHealth ? "checking" : healthDetails?.agent ? "ok" : "down"}`} />
-              <span>Agent ({isCheckingHealth ? "checking" : healthDetails?.agent ? "ok" : "down"})</span>
+            <div className="health-micro-badge" title={getServiceStatus("agent", "Agent", healthDetails?.agent).title} aria-label={getServiceStatus("agent", "Agent", healthDetails?.agent).title}>
+              <span className={`dot ${getServiceStatus("agent", "Agent", healthDetails?.agent).cssClass}`} />
+              <span>Agent</span>
             </div>
-            <div className="health-micro-badge" title="Pinecone RAG Vector Store Status">
-              <span className={`dot ${isCheckingHealth ? "checking" : healthDetails?.pinecone ? "ok" : "down"}`} />
-              <span>RAG ({isCheckingHealth ? "checking" : healthDetails?.pinecone ? "ok" : "down"})</span>
+            <div className="health-micro-badge" title={getServiceStatus("pinecone", "RAG", healthDetails?.pinecone).title} aria-label={getServiceStatus("pinecone", "RAG", healthDetails?.pinecone).title}>
+              <span className={`dot ${getServiceStatus("pinecone", "RAG", healthDetails?.pinecone).cssClass}`} />
+              <span>RAG</span>
             </div>
-            <div className="health-micro-badge" title="Groq Inference API Connection">
-              <span className={`dot ${isCheckingHealth ? "checking" : healthDetails?.groq ? "ok" : "down"}`} />
-              <span>Groq ({isCheckingHealth ? "checking" : healthDetails?.groq ? "ok" : "down"})</span>
+            <div className="health-micro-badge" title={getServiceStatus("groq", "LLM", healthDetails?.groq).title} aria-label={getServiceStatus("groq", "LLM", healthDetails?.groq).title}>
+              <span className={`dot ${getServiceStatus("groq", "LLM", healthDetails?.groq).cssClass}`} />
+              <span>LLM</span>
             </div>
           </div>
         </div>

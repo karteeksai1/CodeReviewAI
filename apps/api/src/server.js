@@ -13,54 +13,109 @@ import { publicError } from "./errors.js";
 const app = express();
 
 app.use(cors());
-app.get("/health", async (_req, res) => {
-  let postgresOk = false;
+const serviceRegistry = {
+  postgres: "unknown",
+  redis: "unknown",
+  agent: "unknown",
+  pinecone: "unknown",
+  groq: "unknown"
+};
+
+async function checkPostgres() {
   try {
     if (pool) {
       await pool.query("SELECT 1");
-      postgresOk = true;
+      serviceRegistry.postgres = "ok";
+    } else {
+      serviceRegistry.postgres = "down";
     }
   } catch (err) {
-    logger.error({ err }, "Postgres health check failed");
+    serviceRegistry.postgres = "down";
   }
+}
 
-  let redisOk = false;
+async function checkRedis() {
   try {
     if (connection) {
       await connection.ping();
-      redisOk = true;
+      serviceRegistry.redis = "ok";
+    } else {
+      serviceRegistry.redis = "down";
     }
   } catch (err) {
-    logger.error({ err }, "Redis health check failed");
+    serviceRegistry.redis = "down";
   }
+}
 
-  let agentOk = false;
-  let pineconeOk = false;
-  let groqOk = false;
+async function checkAgent() {
   try {
     const response = await fetch(`${config.agentUrl.replace(/\/$/, "")}/health`);
     if (response.ok) {
       const data = await response.json();
-      agentOk = true;
-      pineconeOk = data.pinecone || false;
-      groqOk = data.groq || false;
+      serviceRegistry.agent = "ok";
+      if (serviceRegistry.pinecone !== "checking") {
+        serviceRegistry.pinecone = data.pinecone ? "ok" : "down";
+      }
+      if (serviceRegistry.groq !== "checking") {
+        serviceRegistry.groq = data.groq ? "ok" : "down";
+      }
+    } else {
+      serviceRegistry.agent = "down";
+      if (serviceRegistry.pinecone !== "checking") {
+        serviceRegistry.pinecone = "down";
+      }
+      if (serviceRegistry.groq !== "checking") {
+        serviceRegistry.groq = "down";
+      }
     }
   } catch (err) {
-    logger.error({ err }, "Agent health check failed");
+    serviceRegistry.agent = "down";
+    if (serviceRegistry.pinecone !== "checking") {
+      serviceRegistry.pinecone = "down";
+    }
+    if (serviceRegistry.groq !== "checking") {
+      serviceRegistry.groq = "down";
+    }
   }
+}
 
-  const allOk = postgresOk && redisOk && agentOk && pineconeOk && groqOk;
+function startHealthChecks() {
+  checkPostgres();
+  checkRedis();
+  checkAgent();
+  setInterval(() => {
+    checkPostgres();
+    checkRedis();
+    checkAgent();
+  }, 5000);
+}
+
+app.get("/health", (_req, res) => {
+  const allOk = !Object.values(serviceRegistry).includes("down");
   res.status(200).json({
     status: allOk ? "healthy" : "unhealthy",
-    postgres: postgresOk,
-    redis: redisOk,
-    agent: agentOk,
-    pinecone: pineconeOk,
-    groq: groqOk
+    postgres: serviceRegistry.postgres,
+    redis: serviceRegistry.redis,
+    agent: serviceRegistry.agent,
+    pinecone: serviceRegistry.pinecone,
+    groq: serviceRegistry.groq
   });
 });
 app.use("/webhook", webhookRouter);
 app.use(express.json({ limit: "2mb" }));
+app.post("/health/status", (req, res) => {
+  let { service, status } = req.body ?? {};
+  if (service === "llm") service = "groq";
+  if (service === "rag") service = "pinecone";
+  if (service === "db") service = "postgres";
+  if (service === "queue") service = "redis";
+  if (["postgres", "redis", "agent", "pinecone", "groq"].includes(service)) {
+    if (["unknown", "checking", "ok", "down"].includes(status)) {
+      serviceRegistry[service] = status;
+    }
+  }
+  res.json({ ok: true });
+});
 app.use("/auth", authRouter);
 app.use("/reviews", reviewsRouter);
 
@@ -86,6 +141,7 @@ app.use((err, req, res, _next) => {
 });
 
 await initDb();
+startHealthChecks();
 
 app.listen(config.port, () => {
   logger.info({ port: config.port }, "CodeReviewAI API listening");
