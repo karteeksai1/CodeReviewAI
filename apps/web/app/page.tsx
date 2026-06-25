@@ -86,10 +86,12 @@ export default function LandingPage() {
           <svg
             style={{
               position: "absolute",
-              top: 0,
-              left: 0,
-              width: "100%",
-              height: "100%",
+              top: -1,
+              left: -1,
+              right: -1,
+              bottom: -1,
+              width: "calc(100% + 2px)",
+              height: "calc(100% + 2px)",
               opacity: 0.75,
               zIndex: 1,
               pointerEvents: "none"
@@ -109,16 +111,18 @@ export default function LandingPage() {
               </filter>
             </defs>
             <rect width="800" height="600" fill="url(#bgGrad)" />
-            <g filter="url(#motionBlur)">
-              <path d="M 900 -100 L 300 700" stroke="#1b4332" strokeWidth="180" opacity="0.6" strokeLinecap="round" />
-              <path d="M 800 -200 L 100 600" stroke="#2d6a4f" strokeWidth="120" opacity="0.5" strokeLinecap="round" />
-              <path d="M 1100 -50 L 500 750" stroke="#081c10" strokeWidth="200" opacity="0.8" strokeLinecap="round" />
-              <path d="M 750 -50 L 250 650" stroke="#52b788" strokeWidth="60" opacity="0.4" strokeLinecap="round" />
-              <path d="M 850 50 L 450 700" stroke="#74c69d" strokeWidth="40" opacity="0.3" strokeLinecap="round" />
-              <path d="M 600 -150 L 100 500" stroke="#d8f3dc" strokeWidth="15" opacity="0.25" strokeLinecap="round" />
-              <path d="M 700 -80 L 300 520" stroke="#ffffff" strokeWidth="8" opacity="0.35" strokeLinecap="round" />
-              <path d="M 950 150 L 600 650" stroke="#52b788" strokeWidth="80" opacity="0.25" strokeLinecap="round" />
-              <path d="M 500 -200 L 0 500" stroke="#2d6a4f" strokeWidth="90" opacity="0.3" strokeLinecap="round" />
+            <g className="animated-streaks" filter="url(#motionBlur)">
+              <path d="M 950 -50 L 250 750" stroke="#081c10" strokeWidth="240" opacity="0.9" strokeLinecap="round" />
+              <path d="M 800 -200 L 150 700" stroke="#1b4332" strokeWidth="180" opacity="0.7" strokeLinecap="round" />
+              <path d="M 1150 50 L 350 850" stroke="#030c05" strokeWidth="300" opacity="0.95" strokeLinecap="round" />
+              <path d="M 750 -100 L 400 600" stroke="#52b788" strokeWidth="100" opacity="0.55" strokeLinecap="round" />
+              <path d="M 850 100 L 500 800" stroke="#74c69d" strokeWidth="50" opacity="0.45" strokeLinecap="round" />
+              <path d="M 650 -180 L 200 550" stroke="#d8f3dc" strokeWidth="20" opacity="0.35" strokeLinecap="round" />
+              <path d="M 720 -50 L 380 620" stroke="#ffffff" strokeWidth="6" opacity="0.5" strokeLinecap="round" />
+              <path d="M 1000 200 L 500 800" stroke="#2d6a4f" strokeWidth="140" opacity="0.4" strokeLinecap="round" />
+              <path d="M 550 -250 L 150 550" stroke="#1b4332" strokeWidth="110" opacity="0.5" strokeLinecap="round" />
+              <path d="M 600 -80 L 100 520" stroke="#ffffff" strokeWidth="8" opacity="0.4" strokeLinecap="round" />
+              <path d="M 900 0 L 400 750" stroke="#52b788" strokeWidth="75" opacity="0.3" strokeLinecap="round" />
             </g>
           </svg>
           <div className="hero-text-overlay">
