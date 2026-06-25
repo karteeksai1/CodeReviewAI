@@ -233,6 +233,8 @@ a { color: inherit; }
 
 .hero-visual {
   position: relative;
+  z-index: 2;
+  margin-right: -1px;
   background: #070c08;
   padding: 60px;
   display: flex;
@@ -897,6 +899,8 @@ a { color: inherit; }
     grid-template-columns: 1fr;
   }
   .hero-visual {
+    margin-right: 0;
+    margin-bottom: -1px;
     min-height: 480px;
     padding: 40px;
   }
