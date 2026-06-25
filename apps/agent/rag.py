@@ -4,6 +4,7 @@ import re
 import httpx
 import subprocess
 from pathlib import Path
+import dotenv
 
 try:
     from dotenv import load_dotenv
