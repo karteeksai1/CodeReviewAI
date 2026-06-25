@@ -78,9 +78,6 @@ export default function LandingPage() {
     <div className="landing-root">
       <header className="landing-header">
         <div className="brand"><ShieldCheck size={20} />CodeReviewAI</div>
-        <a className="signin-link" href="#hero">
-          Sign in to Dashboard →
-        </a>
       </header>
 
       <section className="landing-hero" id="hero">
@@ -125,7 +122,7 @@ export default function LandingPage() {
             </g>
           </svg>
           <div className="hero-text-overlay">
-            <h1 className="hero-overlay-title">Bugs don't take coffee breaks.</h1>
+            <h1 className="hero-overlay-title">Catch what humans miss.</h1>
           </div>
         </div>
 
@@ -134,11 +131,11 @@ export default function LandingPage() {
             <h2 className="panel-title">
               {isSignUp ? "Create your account" : "Sign in to CodeReviewAI"}
             </h2>
-            <p className="panel-desc">
-              {isSignUp
-                ? "Sign up to track agent runs, inspect security issues, and audit review queue load."
-                : "Enter your credentials to access the multi-agent developer dashboard."}
-            </p>
+            {isSignUp && (
+              <p className="panel-desc">
+                Sign up to track agent runs, inspect security issues, and audit review queue load.
+              </p>
+            )}
 
             {error && <div className="auth-error-banner">{error}</div>}
 
@@ -395,7 +392,7 @@ export default function LandingPage() {
       <section className="landing-section final-cta" id="cta">
         <div className="section-container">
           <div className="cta-box">
-            <h2 className="cta-title">Upgrade your review process today</h2>
+            <h2 className="cta-title">Bugs don't take coffee breaks.<br />Upgrade your review process today</h2>
             <p className="cta-desc">Integrate parallel, context-grounded agent reviews directly into your pull requests. Set up in less than 5 minutes.</p>
             <div className="cta-action-group">
               <a className="primary-github-btn text-lg" href="https://github.com/apps/codereviewai/installations/new">

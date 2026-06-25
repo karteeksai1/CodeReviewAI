@@ -1051,6 +1051,9 @@ function ConnectView({ connectState, repositoryToIndex, setRepositoryToIndex, st
             />
             <button onClick={startIndexing} disabled={!/^[\w.-]+\/[\w.-]+$/.test(repositoryToIndex)}><RefreshCw size={16} />Index</button>
           </div>
+          <p style={{ fontSize: "11px", color: "var(--muted)", marginTop: "6px", marginLeft: "4px" }}>
+            (paste your github repo link)
+          </p>
         </div>
       </div>
       <div className="run-list">
