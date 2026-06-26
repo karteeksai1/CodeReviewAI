@@ -9,6 +9,8 @@ GROQ_CHAT_URL = "https://api.groq.com/openai/v1/chat/completions"
 
 request_id_var = contextvars.ContextVar("request_id", default="")
 token_usage_var = contextvars.ContextVar("token_usage", default=0)
+raw_response_var = contextvars.ContextVar("raw_response", default=[])
+raw_response_log = []
 
 
 in_flight_groq_calls = 0
@@ -92,6 +94,9 @@ async def groq_json(system: str, user: str, *, temperature: float = 0.1, is_warm
                 tokens = usage.get("total_tokens", 0)
                 token_usage_var.set(token_usage_var.get() + tokens)
                 content = res_data["choices"][0]["message"]["content"]
+                if os.getenv("CAPTURE_RAW_GROQ") == "true":
+                    raw_response_log.append(content)
+                    raw_response_var.set([*raw_response_var.get(), content])
                 try:
                     success = True
                     return json.loads(content)
@@ -135,7 +140,18 @@ def diff_excerpt(files: list[dict[str, Any]], *, max_chars: int = 64000) -> str:
 
 def normalize_findings(raw: Any, category: str) -> list[dict[str, Any]]:
     if isinstance(raw, dict):
-        raw = raw.get("findings", [])
+        if isinstance(raw.get("findings"), list):
+            raw = raw.get("findings", [])
+        elif isinstance(raw.get("issues"), list):
+            raw = raw.get("issues", [])
+        elif isinstance(raw.get("results"), list):
+            raw = raw.get("results", [])
+        elif isinstance(raw.get("finding"), dict):
+            raw = [raw.get("finding")]
+        elif all(key in raw for key in ("title", "body")):
+            raw = [raw]
+        else:
+            raw = []
     if not isinstance(raw, list):
         return []
 

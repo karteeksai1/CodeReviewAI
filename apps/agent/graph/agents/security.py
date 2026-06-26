@@ -43,6 +43,8 @@ async def security_agent(state):
         
         if any(pattern.search(code) for pattern in SECRET_PATTERNS):
             findings.append(finding("security", "critical", "Potential secret committed in the diff", "A new line appears to contain a hard-coded credential. Move it to a secret store and rotate it.", file, line, 0.92, rag_context=context))
+        if re.search(r"\beval\s*\(", code):
+            findings.append(finding("security", "critical", "User-controlled code execution via eval", "The diff executes a string with eval(). If user input reaches that string, attackers can run arbitrary JavaScript. Replace eval with a safe explicit operation.", file, line, 0.9, rag_context=context))
         if "jwt.decode" in lower and "verify" not in lower:
             findings.append(finding("security", "high", "JWT is decoded without verification", "Verify JWT signatures with the expected algorithm, issuer, and audience.", file, line, 0.86, rag_context=context))
         if re.search(r"select .* \+|where .* \+", lower):
@@ -107,6 +109,7 @@ async def _groq_security_findings(state, context_str):
         "You are CodeReviewAI's security reviewer. Return JSON only with a findings array. "
         "Each finding must include category, severity, title, body, path, line, confidence. "
         "Focus on exploitable auth, injection, secret, permission, data exposure, and supply-chain risks. "
+        "Enumerate every distinct concrete issue in the diff. Do not stop after the highest-severity issue, and do not collapse unrelated issues in the same file into one finding. "
         "Strict Precision Rules: "
         "1. Do NOT emit a finding if your analysis concludes the issue does not apply, is not present, or is not applicable. Only emit findings for issues actually identified in the code. "
         "2. Do NOT emit hypothetical or generic findings (e.g. 'code is not thread-safe' or 'stores data in memory') unless you have concrete justification grounded in the actual code/diff showing a real, material risk. "
