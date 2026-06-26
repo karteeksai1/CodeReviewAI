@@ -135,11 +135,15 @@ export async function postReviewSummary({ owner, repo, pullNumber, installationI
     const validLines = filesMap.get(finding.path);
     const lineNum = Number(finding.line);
     if (validLines && validLines.has(lineNum)) {
+      const severityStr = (finding.severity || "info").toUpperCase();
+      const categoryStr = finding.category || "General";
+      const titleStr = finding.title || "";
+      const bodyStr = finding.body || "";
       comments.push({
         path: finding.path,
         line: lineNum,
         side: "RIGHT",
-        body: `**${finding.severity.toUpperCase()} ${finding.category}**: ${finding.title}\n\n${finding.body}`
+        body: `**${severityStr} ${categoryStr}**: ${titleStr}\n\n${bodyStr}`
       });
     } else {
       summaryOnlyFindings.push(finding);
@@ -169,7 +173,11 @@ function renderReviewBody(summary, findings, summaryOnlyFindings = []) {
   if (summaryOnlyFindings.length > 0) {
     const additional = summaryOnlyFindings.map((finding) => {
       const loc = finding.path ? ` at ${finding.path}:${finding.line}` : "";
-      return `### **${finding.severity.toUpperCase()} ${finding.category}**${loc}: ${finding.title}\n\n${finding.body}`;
+      const severityStr = (finding.severity || "info").toUpperCase();
+      const categoryStr = finding.category || "General";
+      const titleStr = finding.title || "";
+      const bodyStr = finding.body || "";
+      return `### **${severityStr} ${categoryStr}**${loc}: ${titleStr}\n\n${bodyStr}`;
     }).join("\n\n");
     bodySections.push("", "### Additional Findings (outside changed lines)", "", additional);
   }

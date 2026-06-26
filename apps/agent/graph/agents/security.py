@@ -22,7 +22,7 @@ async def security_agent(state):
     contexts = []
     namespace = state.get("repository", {}).get("fullName", "").replace("/", "__")
     
-    unique_files = {file.get("path") for file in state.get("files", []) if file.get("path")}
+    unique_files = {file.get("path") for file in state.get("files", []) if file.get("path") and file.get("status") != "removed"}
     file_contexts = {}
     
     async def fetch_file_context(path):
@@ -57,7 +57,7 @@ async def security_agent(state):
     
     for file in state.get("files", []):
         path = file.get("path")
-        if not path:
+        if not path or file.get("status") == "removed":
             continue
         lang = get_file_language(path)
         if not lang:

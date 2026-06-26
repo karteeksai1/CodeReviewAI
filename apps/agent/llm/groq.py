@@ -125,6 +125,8 @@ def diff_excerpt(files: list[dict[str, Any]], *, max_chars: int = 64000) -> str:
     parts = []
     total = 0
     for file in files:
+        if file.get("status") == "removed":
+            continue
         header = f"\n--- {file.get('path', 'unknown')} ({file.get('status', 'modified')}) ---\n"
         patch = file.get("patch", "")
         chunk = header + patch

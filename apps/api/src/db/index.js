@@ -258,18 +258,16 @@ export async function getDashboardStats(userId) {
   if (!pool) return { reviews: 0, findings: 0, high: 0, latestRisk: 0, reviewsDelta: 0, findingsDelta: 0, highDelta: 0, previousRisk: 0, reviewsHistory: [], findingsHistory: [], highHistory: [], riskHistory: [] };
   const result = await query(`
     with user_revs as (
-      select rev.id, rev.risk_score, rev.created_at
+      select distinct on (pr.id) rev.id, rev.risk_score, rev.created_at
       from reviews rev
       join pull_requests pr on pr.id = rev.pull_request_id
       join repositories r on r.id = pr.repository_id
       where r.user_id = $1
+      order by pr.id, rev.created_at desc
     ), user_findings as (
       select f.id, f.severity, f.created_at
       from findings f
-      join reviews rev on rev.id = f.review_id
-      join pull_requests pr on pr.id = rev.pull_request_id
-      join repositories r on r.id = pr.repository_id
-      where r.user_id = $1
+      join user_revs rev on rev.id = f.review_id
     )
     select
       (select count(*)::int from user_revs) as reviews,
@@ -320,18 +318,16 @@ export async function getRepoStats(userId, repoFullName) {
   if (!pool) return { reviews: 0, findings: 0, high: 0, latestRisk: 0, reviewsDelta: 0, findingsDelta: 0, highDelta: 0, previousRisk: 0, reviewsHistory: [], findingsHistory: [], highHistory: [], riskHistory: [] };
   const result = await query(`
     with user_revs as (
-      select rev.id, rev.risk_score, rev.created_at
+      select distinct on (pr.id) rev.id, rev.risk_score, rev.created_at
       from reviews rev
       join pull_requests pr on pr.id = rev.pull_request_id
       join repositories r on r.id = pr.repository_id
       where r.user_id = $1 and r.full_name = $2
+      order by pr.id, rev.created_at desc
     ), user_findings as (
       select f.id, f.severity, f.created_at
       from findings f
-      join reviews rev on rev.id = f.review_id
-      join pull_requests pr on pr.id = rev.pull_request_id
-      join repositories r on r.id = pr.repository_id
-      where r.user_id = $1 and r.full_name = $2
+      join user_revs rev on rev.id = f.review_id
     )
     select
       (select count(*)::int from user_revs) as reviews,
@@ -460,14 +456,14 @@ export async function listReviewsByPr({ userId, owner, repo, number }) {
     throw err;
   }
   const result = await query(
-    `select r.*, pr.number, pr.title, repositories.full_name,
+    `select r.*, pr.number, pr.title, pr.head_sha, pr.base_sha, repositories.full_name,
       coalesce(json_agg(f.* order by f.created_at) filter (where f.id is not null), '[]'::json) as findings
      from reviews r
      join pull_requests pr on pr.id = r.pull_request_id
      join repositories on repositories.id = pr.repository_id
      left join findings f on f.review_id = r.id
      where repositories.user_id = $1 and repositories.owner = $2 and repositories.name = $3 and pr.number = $4
-     group by r.id, pr.number, pr.title, repositories.full_name
+     group by r.id, pr.number, pr.title, pr.head_sha, pr.base_sha, repositories.full_name
      order by r.created_at desc`,
     [userId, owner, repo, prNumber]
   );

@@ -638,23 +638,44 @@ function ReviewsView(props: {
                   Connect a repo to see your first review here →
                 </button>
               </div>
-            ) : props.reviews.map((review) => (
+            ) : props.reviews.map((review, idx) => (
               <button className="row row-button" key={review.id} onClick={() => props.openReview(review)}>
                 <div className={badgeClass(review.status)}>{review.status}</div>
-                <div><strong>{review.full_name} #{review.number}</strong><div className="findings">{review.summary ?? review.title}</div></div>
+                <div>
+                  <strong>{review.full_name} #{review.number}</strong>
+                  {review.head_sha && (
+                    <span className="commit-hash" style={{ marginLeft: "8px", fontSize: "11px", color: "var(--muted)", fontFamily: "monospace" }}>
+                      {review.head_sha.substring(0, 7)}
+                    </span>
+                  )}
+                  {idx === 0 ? (
+                    <span className="latest-badge" style={{ marginLeft: "8px", fontSize: "10px", padding: "2px 6px", borderRadius: "4px", backgroundColor: "rgba(16, 185, 129, 0.1)", color: "#10b981", fontWeight: "bold" }}>
+                      latest
+                    </span>
+                  ) : (
+                    <span className="outdated-badge" style={{ marginLeft: "8px", fontSize: "10px", padding: "2px 6px", borderRadius: "4px", backgroundColor: "rgba(239, 68, 68, 0.1)", color: "#ef4444", fontWeight: "bold" }}>
+                      outdated
+                    </span>
+                  )}
+                  <div className="findings">{review.summary ?? review.title}</div>
+                </div>
                 <div>{review.risk_score ?? "0"}</div>
                 <div>{review.findings?.length ?? 0}</div>
               </button>
             ))}
           </div>
-          <ReviewDetail review={props.selectedReview} onPipelineNodeClick={props.onPipelineNodeClick} />
+          <ReviewDetail
+            review={props.selectedReview}
+            isLatest={props.reviews.length > 0 && props.reviews[0]?.id === props.selectedReview?.id}
+            onPipelineNodeClick={props.onPipelineNodeClick}
+          />
         </div>
       )}
     </section>
   );
 }
 
-function ReviewDetail({ review, onPipelineNodeClick }: { review: Review | null; onPipelineNodeClick?: (agent: string, reviewId: number) => void }) {
+function ReviewDetail({ review, isLatest, onPipelineNodeClick }: { review: Review | null; isLatest: boolean; onPipelineNodeClick?: (agent: string, reviewId: number) => void }) {
   const [severityFilter, setSeverityFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [sortBy, setSortBy] = useState("severity");
@@ -701,8 +722,24 @@ function ReviewDetail({ review, onPipelineNodeClick }: { review: Review | null; 
 
   return (
     <aside className="detail-panel">
-      <h2>{review.full_name} #{review.number}</h2>
-      <p className="muted">{review.summary ?? review.title}</p>
+      <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px", flexWrap: "wrap" }}>
+        <h2 style={{ margin: 0 }}>{review.full_name} #{review.number}</h2>
+        {review.head_sha && (
+          <code style={{ fontSize: "11px", color: "var(--muted)", padding: "2px 6px", borderRadius: "4px", backgroundColor: "rgba(255,255,255,0.05)", fontFamily: "monospace" }}>
+            {review.head_sha.substring(0, 7)}
+          </code>
+        )}
+        {isLatest ? (
+          <span style={{ fontSize: "10px", padding: "2px 6px", borderRadius: "4px", backgroundColor: "rgba(16, 185, 129, 0.1)", color: "#10b981", fontWeight: "bold" }}>
+            latest
+          </span>
+        ) : (
+          <span style={{ fontSize: "10px", padding: "2px 6px", borderRadius: "4px", backgroundColor: "rgba(239, 68, 68, 0.1)", color: "#ef4444", fontWeight: "bold" }}>
+            outdated
+          </span>
+        )}
+      </div>
+      <p className="muted" style={{ marginTop: "4px" }}>{review.summary ?? review.title}</p>
       {(() => {
         const getBadge = () => {
           if (review.mergeable === false) {

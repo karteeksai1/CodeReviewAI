@@ -13,7 +13,7 @@ async def style_agent(state):
     last_added_return_by_path = {}
     declared_by_path = collect_declared_identifiers(state.get("files", []))
     
-    unique_files = {file.get("path") for file in state.get("files", []) if file.get("path")}
+    unique_files = {file.get("path") for file in state.get("files", []) if file.get("path") and file.get("status") != "removed"}
     file_contexts = {}
     
     async def fetch_file_context(path):

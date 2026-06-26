@@ -9,11 +9,13 @@ import {
   listRecentAgentRuns,
   listReviewsByPr,
   updateIndexingJob,
+  updateReview,
   upsertRepository,
   query
 } from "../db/index.js";
 import { requireJwt } from "../middleware/auth.js";
 import { reviewQueue } from "../queue/index.js";
+import { getInstallationOctokit } from "../services/github.js";
 
 export const reviewsRouter = express.Router();
 
@@ -234,6 +236,56 @@ reviewsRouter.get("/:id", requireJwt, async (req, res, next) => {
       res.status(404).json({ error: "Review not found." });
       return;
     }
+
+    if (review.installation_id) {
+      try {
+        const [owner, repo] = review.full_name.split("/");
+        const octokit = await getInstallationOctokit(Number(review.installation_id));
+        const prRes = await octokit.pulls.get({ owner, repo, pull_number: review.number });
+        const pullRequest = prRes.data;
+        const mergeable = pullRequest.mergeable;
+        const mergeableState = pullRequest.mergeable_state;
+
+        let conflictDetails = null;
+        if (mergeable === false || mergeableState === "dirty") {
+          try {
+            const filesRes = await octokit.pulls.listFiles({ owner, repo, pull_number: review.number, per_page: 100 });
+            const files = filesRes.data;
+            const compareRes = await octokit.repos.compareCommits({
+              owner,
+              repo,
+              base: pullRequest.base.ref,
+              head: pullRequest.head.sha
+            });
+            const mergeBaseSha = compareRes.data.merge_base_commit?.sha;
+            if (mergeBaseSha && mergeBaseSha !== pullRequest.base.sha) {
+              const baseCompareRes = await octokit.repos.compareCommits({
+                owner,
+                repo,
+                base: mergeBaseSha,
+                head: pullRequest.base.ref
+              });
+              const prFileNames = files.map((file) => file.filename);
+              const baseFileNames = baseCompareRes.data.files?.map((file) => file.filename) || [];
+              const intersected = prFileNames.filter((file) => baseFileNames.includes(file));
+              if (intersected.length > 0) {
+                conflictDetails = intersected.join(", ");
+              }
+            }
+          } catch (err) {}
+        }
+
+        await updateReview(review.id, {
+          mergeable,
+          mergeableState,
+          conflictDetails
+        });
+        review.mergeable = mergeable;
+        review.mergeable_state = mergeableState;
+        review.conflict_details = conflictDetails;
+      } catch (err) {}
+    }
+
     res.json({ review });
   } catch (err) {
     next(err);

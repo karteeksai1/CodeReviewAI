@@ -17,6 +17,8 @@ export type Review = {
   mergeable?: boolean | null;
   mergeable_state?: string | null;
   conflict_details?: string | null;
+  head_sha?: string | null;
+  base_sha?: string | null;
 };
 
 export type Finding = {
