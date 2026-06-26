@@ -153,12 +153,41 @@ async def warmup():
     return {"ok": True}
 
 
+in_flight_reviews = 0
+in_flight_reviews_lock = None
+
+
+async def increment_reviews():
+    global in_flight_reviews, in_flight_reviews_lock
+    import asyncio
+    if in_flight_reviews_lock is None:
+        in_flight_reviews_lock = asyncio.Lock()
+    async with in_flight_reviews_lock:
+        in_flight_reviews += 1
+        if in_flight_reviews == 1:
+            await report_status("agent", "checking")
+
+
+async def decrement_reviews(success=True):
+    global in_flight_reviews, in_flight_reviews_lock
+    import asyncio
+    if in_flight_reviews_lock is None:
+        in_flight_reviews_lock = asyncio.Lock()
+    async with in_flight_reviews_lock:
+        if in_flight_reviews > 0:
+            in_flight_reviews -= 1
+            if in_flight_reviews == 0:
+                await report_status("agent", "ok" if success else "down")
+
+
 @app.post("/review")
 async def review(request: ReviewRequest, req: Request):
     req_id = req.headers.get("x-request-id", "unknown-request-id")
     request_id_var.set(req_id)
     token_usage_var.set(0)
     start_time = time.perf_counter()
+    await increment_reviews()
+    success = False
     try:
         result = await run_review(request.model_dump())
         latency = int((time.perf_counter() - start_time) * 1000)
@@ -170,6 +199,7 @@ async def review(request: ReviewRequest, req: Request):
             token_usage=token_usage_var.get(),
             agent_plan=result.get("agent_plan", [])
         )
+        success = True
         return result
     except Exception as e:
         latency = int((time.perf_counter() - start_time) * 1000)
@@ -181,6 +211,8 @@ async def review(request: ReviewRequest, req: Request):
             error=str(e)
         )
         raise e
+    finally:
+        await decrement_reviews(success)
 
 
 @app.post("/index")

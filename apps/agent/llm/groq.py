@@ -103,7 +103,7 @@ async def groq_json(system: str, user: str, *, temperature: float = 0.1, is_warm
             await decrement_groq_calls(success)
 
 
-def diff_excerpt(files: list[dict[str, Any]], *, max_chars: int = 9000) -> str:
+def diff_excerpt(files: list[dict[str, Any]], *, max_chars: int = 64000) -> str:
     parts = []
     total = 0
     for file in files:

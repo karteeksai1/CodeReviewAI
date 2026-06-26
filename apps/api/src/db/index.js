@@ -113,6 +113,8 @@ export async function initDb() {
   await query(`
     alter table repositories add column if not exists user_id bigint references users(id);
     alter table indexing_jobs add column if not exists user_id bigint references users(id);
+    alter table reviews add column if not exists mergeable boolean;
+    alter table reviews add column if not exists mergeable_state text;
     create unique index if not exists findings_unique_idx on findings (review_id, category, severity, (coalesce(path, '')), (coalesce(line, 0)), title);
   `);
 
@@ -176,9 +178,30 @@ export async function createReview({ pullRequestId, queueJobId, status }) {
 
 export async function updateReview(reviewId, fields) {
   if (!pool || !reviewId) return null;
+  const dbFields = {};
+  if (fields.status !== undefined) dbFields.status = fields.status;
+  if (fields.summary !== undefined) dbFields.summary = fields.summary;
+  if (fields.riskScore !== undefined) dbFields.risk_score = fields.riskScore;
+  if (fields.risk_score !== undefined) dbFields.risk_score = fields.risk_score;
+  if (fields.postedToGithub !== undefined) dbFields.posted_to_github = fields.postedToGithub;
+  if (fields.posted_to_github !== undefined) dbFields.posted_to_github = fields.posted_to_github;
+  if (fields.completedAt !== undefined) dbFields.completed_at = fields.completedAt;
+  if (fields.completed_at !== undefined) dbFields.completed_at = fields.completed_at;
+  if (fields.error !== undefined) dbFields.error = fields.error;
+  if (fields.mergeable !== undefined) dbFields.mergeable = fields.mergeable;
+  if (fields.mergeableState !== undefined) dbFields.mergeable_state = fields.mergeableState;
+  if (fields.mergeable_state !== undefined) dbFields.mergeable_state = fields.mergeable_state;
+
+  const keys = Object.keys(dbFields);
+  const values = Object.values(dbFields);
+  if (keys.length === 0) return null;
+  const setClause = keys.map((key, i) => `${key} = $${i + 2}`).join(", ");
   const result = await query(
-    `update reviews set status = coalesce($2,status), summary = coalesce($3,summary), risk_score = coalesce($4,risk_score), posted_to_github = coalesce($5,posted_to_github), completed_at = coalesce($6,completed_at), error = coalesce($7,error), updated_at = now() where id = $1 returning *`,
-    [reviewId, fields.status, fields.summary, fields.riskScore, fields.postedToGithub, fields.completedAt, fields.error]
+    `update reviews
+     set ${setClause}, updated_at = now()
+     where id = $1
+     returning *`,
+    [reviewId, ...values]
   );
   return result.rows[0];
 }

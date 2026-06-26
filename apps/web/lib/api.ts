@@ -14,6 +14,8 @@ export type Review = {
   title: string;
   findings: Finding[];
   agent_runs?: AgentRun[];
+  mergeable?: boolean | null;
+  mergeable_state?: string | null;
 };
 
 export type Finding = {

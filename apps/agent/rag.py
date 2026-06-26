@@ -212,10 +212,53 @@ def get_pinecone():
         return None
 
 
+async def report_status(service: str, status: str):
+    try:
+        import os
+        api_url = os.getenv("PUBLIC_API_URL", "http://localhost:3001")
+        async with httpx.AsyncClient() as client:
+            await client.post(
+                f"{api_url}/health/status",
+                json={"service": service, "status": status},
+                timeout=1.0
+            )
+    except Exception:
+        pass
+
+
+in_flight_rag_calls = 0
+rag_lock = None
+
+
+async def increment_rag_calls():
+    global in_flight_rag_calls, rag_lock
+    import asyncio
+    if rag_lock is None:
+        rag_lock = asyncio.Lock()
+    async with rag_lock:
+        in_flight_rag_calls += 1
+        if in_flight_rag_calls == 1:
+            await report_status("rag", "checking")
+
+
+async def decrement_rag_calls(success=True):
+    global in_flight_rag_calls, rag_lock
+    import asyncio
+    if rag_lock is None:
+        rag_lock = asyncio.Lock()
+    async with rag_lock:
+        if in_flight_rag_calls > 0:
+            in_flight_rag_calls -= 1
+            if in_flight_rag_calls == 0:
+                await report_status("rag", "ok" if success else "down")
+
+
 async def retrieve_context(namespace, query, limit=3, extension=None):
     client = get_pinecone()
     if not client:
         return []
+    await increment_rag_calls()
+    success = False
     try:
         q_filter = {"bm25_terms": {"$in": tokenize(query)[:20]}}
         if extension:
@@ -227,6 +270,9 @@ async def retrieve_context(namespace, query, limit=3, extension=None):
             include_metadata=True,
             filter=q_filter,
         )
+        success = True
         return [{"path": match.metadata.get("path"), "text": match.metadata.get("text", "")[:600], "score": match.score} for match in result.matches]
     except Exception:
         return []
+    finally:
+        await decrement_rag_calls(success)

@@ -44,16 +44,42 @@ const worker = new Worker(REVIEW_QUEUE_NAME, async (job) => {
   
   const repoRow = await upsertRepository(repository, installationId, userId);
   const prRow = await upsertPullRequest(repoRow?.id, pullRequest);
-  const review = await createReview({ pullRequestId: prRow?.id, queueJobId: String(job.id), status: "in_progress" });
-  await upsertAgentRuns(review?.id, ["security", "performance", "style"].map((agent) => ({
-    agent,
-    status: "running",
-    startedAt: new Date()
-  })));
+  let review;
+  const existingReviewRes = await query("select * from reviews where queue_job_id = $1", [String(job.id)]);
+  if (existingReviewRes.rows[0]) {
+    review = existingReviewRes.rows[0];
+    const attempt = job.attemptsMade + 1;
+    const maxAttempts = job.opts?.attempts || 5;
+    const retryStatus = `retrying (attempt ${attempt}/${maxAttempts})`;
+    await updateReview(review.id, { status: retryStatus, error: null, completedAt: null });
+    await upsertAgentRuns(review.id, ["security", "performance", "style"].map((agent) => ({
+      agent,
+      status: retryStatus,
+      error: null
+    })));
+    await query("delete from findings where review_id = $1", [review.id]);
+    await updateReview(review.id, { status: "in_progress" });
+    await upsertAgentRuns(review.id, ["security", "performance", "style"].map((agent) => ({
+      agent,
+      status: "running",
+      startedAt: new Date()
+    })));
+  } else {
+    review = await createReview({ pullRequestId: prRow?.id, queueJobId: String(job.id), status: "in_progress" });
+    await upsertAgentRuns(review?.id, ["security", "performance", "style"].map((agent) => ({
+      agent,
+      status: "running",
+      startedAt: new Date()
+    })));
+  }
 
   const requestId = crypto.randomUUID();
   try {
     const context = await fetchPullRequestContext({ owner, repo, pullNumber: pullRequest.number, installationId });
+    await updateReview(review?.id, {
+      mergeable: context.pullRequest.mergeable,
+      mergeableState: context.pullRequest.mergeableState
+    });
     const agentResult = await requestAgentReview(context, requestId);
     const findings = agentResult.findings ?? [];
     await insertFindings(review?.id, findings);

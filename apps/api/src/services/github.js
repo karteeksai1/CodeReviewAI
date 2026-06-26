@@ -17,7 +17,7 @@ export async function getInstallationOctokit(installationId) {
 
 export async function fetchPullRequestContext({ owner, repo, pullNumber, installationId }) {
   const octokit = await getInstallationOctokit(installationId);
-  const [{ data: pullRequest }, { data: files }, diffResponse] = await Promise.all([
+  const [{ data: initialPr }, { data: files }, diffResponse] = await Promise.all([
     octokit.pulls.get({ owner, repo, pull_number: pullNumber }),
     octokit.pulls.listFiles({ owner, repo, pull_number: pullNumber, per_page: 100 }),
     octokit.request("GET /repos/{owner}/{repo}/pulls/{pull_number}", {
@@ -27,6 +27,21 @@ export async function fetchPullRequestContext({ owner, repo, pullNumber, install
       headers: { accept: "application/vnd.github.v3.diff" }
     })
   ]);
+  let pullRequest = initialPr;
+  let mergeable = pullRequest.mergeable;
+  let mergeableState = pullRequest.mergeable_state;
+  if (mergeable === null || mergeable === undefined) {
+    for (let attempt = 1; attempt <= 5; attempt++) {
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      const res = await octokit.pulls.get({ owner, repo, pull_number: pullNumber });
+      pullRequest = res.data;
+      mergeable = pullRequest.mergeable;
+      mergeableState = pullRequest.mergeable_state;
+      if (mergeable !== null && mergeable !== undefined) {
+        break;
+      }
+    }
+  }
   return {
     repository: { owner, name: repo, fullName: `${owner}/${repo}` },
     pullRequest: {
@@ -38,7 +53,9 @@ export async function fetchPullRequestContext({ owner, repo, pullNumber, install
       baseSha: pullRequest.base.sha,
       headSha: pullRequest.head.sha,
       isDraft: pullRequest.draft,
-      url: pullRequest.html_url
+      url: pullRequest.html_url,
+      mergeable,
+      mergeableState
     },
     files: files.map((file) => ({ path: file.filename, status: file.status, additions: file.additions, deletions: file.deletions, changes: file.changes, patch: file.patch ?? "" })),
     diff: String(diffResponse.data ?? "")

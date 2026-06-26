@@ -703,6 +703,24 @@ function ReviewDetail({ review, onPipelineNodeClick }: { review: Review | null; 
     <aside className="detail-panel">
       <h2>{review.full_name} #{review.number}</h2>
       <p className="muted">{review.summary ?? review.title}</p>
+      {(() => {
+        const getBadge = () => {
+          if (review.mergeable === true) return { text: "✅ Mergeable", className: "merge-clean" };
+          if (review.mergeable === false) return { text: "⚠️ Has conflicts with main", className: "merge-conflict" };
+          if (review.mergeable_state === "behind") return { text: "🔻 Behind main branch", className: "merge-behind" };
+          if (review.mergeable_state === "blocked") return { text: "🔒 Blocked", className: "merge-blocked" };
+          if (review.mergeable_state === "unstable") return { text: "⚠️ Unstable", className: "merge-unstable" };
+          return { text: "⏳ Checking mergeability...", className: "merge-checking" };
+        };
+        const badge = getBadge();
+        return (
+          <div className="mergeability-status-wrapper" style={{ margin: "12px 0" }}>
+            <span className={`merge-badge ${badge.className}`}>
+              {badge.text}
+            </span>
+          </div>
+        );
+      })()}
       
       <div className="timeline-container">
         <h3>Analysis Pipeline</h3>
