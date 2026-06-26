@@ -9,6 +9,21 @@ import { connection, REVIEW_QUEUE_NAME } from "./index.js";
 
 await initDb();
 
+function isNonRetryableError(err) {
+  if (!err) return false;
+  const status = err.status || err.statusCode || err.response?.status;
+  if (status && status >= 400 && status < 500 && status !== 429) {
+    return true;
+  }
+  const msg = (err.message || "").toLowerCase();
+  if (msg.includes("unprocessable entity") || msg.includes("validation failed") || msg.includes("422") || msg.includes("400") || msg.includes("403") || msg.includes("401") || msg.includes("404")) {
+    if (!msg.includes("429")) {
+      return true;
+    }
+  }
+  return false;
+}
+
 const worker = new Worker(REVIEW_QUEUE_NAME, async (job) => {
   const { eventName, payload } = job.data;
   if (eventName !== "pull_request") return { skipped: true };
@@ -43,17 +58,32 @@ const worker = new Worker(REVIEW_QUEUE_NAME, async (job) => {
     const findings = agentResult.findings ?? [];
     await insertFindings(review?.id, findings);
     await upsertAgentRuns(review?.id, agentResult.agent_runs ?? []);
-    const posted = await postReviewSummary({ owner, repo, pullNumber: pullRequest.number, installationId, headSha: context.pullRequest.headSha, summary: agentResult.summary, findings });
+    const posted = await postReviewSummary({ owner, repo, pullNumber: pullRequest.number, installationId, headSha: context.pullRequest.headSha, summary: agentResult.summary, findings, files: context.files });
     await updateReview(review?.id, { status: "completed", summary: agentResult.summary, riskScore: agentResult.risk_score, postedToGithub: posted, completedAt: new Date() });
     return { findings: findings.length, riskScore: agentResult.risk_score, posted };
   } catch (err) {
+    let message = err.message || String(err);
+    const nonRetryable = isNonRetryableError(err);
+    if (nonRetryable) {
+      message = `[unrecoverable] ${message}`;
+      try {
+        await job.discard();
+      } catch (discardErr) {
+        logger.error({ jobId: job.id, err: discardErr }, "failed to discard job");
+      }
+    }
     await upsertAgentRuns(review?.id, ["security", "performance", "style"].map((agent) => ({
       agent,
       status: "failed",
       completedAt: new Date(),
-      error: err.message
+      error: message
     })));
-    await updateReview(review?.id, { status: "failed", error: err.message, completedAt: new Date() });
+    await updateReview(review?.id, { status: "failed", error: message, completedAt: new Date() });
+    if (nonRetryable) {
+      const wrappedErr = new Error(message);
+      wrappedErr.status = err.status;
+      throw wrappedErr;
+    }
     throw err;
   }
 }, { connection, concurrency: config.queueConcurrency });

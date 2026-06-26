@@ -934,7 +934,7 @@ function QueueRow({ job, handleRetry, handleDelete, retryingJobId, deletingJobId
   deletingJobId: string | null;
 }) {
   const [showError, setShowError] = useState(false);
-  const isStale = job.state === "failed" && job.failedReason?.includes("installation");
+  const isStale = job.state === "failed" && (job.failedReason?.includes("installation") || job.failedReason?.includes("unrecoverable") || job.failedReason?.includes("non-retryable"));
   return (
     <div className="row queue-row">
       <div>
