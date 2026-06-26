@@ -140,10 +140,30 @@ def normalize_findings(raw: Any, category: str) -> list[dict[str, Any]]:
             "body": str(item.get("body") or item.get("recommendation") or ""),
             "path": item.get("path"),
             "line": _line_or_none(item.get("line")),
-            "confidence": float(item.get("confidence", 0.72)),
+            "confidence": _confidence_to_float(item.get("confidence")),
             "metadata": {"provider": "groq", **(item.get("metadata") if isinstance(item.get("metadata"), dict) else {})},
         })
     return findings
+
+
+def _confidence_to_float(value: Any) -> float:
+    try:
+        if value is None or value == "":
+            return 0.72
+        if isinstance(value, (int, float)):
+            return float(value)
+        val_str = str(value).strip().lower()
+        if val_str in {"critical", "high"}:
+            return 0.9
+        if val_str == "medium":
+            return 0.75
+        if val_str == "low":
+            return 0.5
+        if val_str == "info":
+            return 0.3
+        return float(val_str)
+    except (TypeError, ValueError):
+        return 0.72
 
 
 def _line_or_none(value: Any) -> int | None:

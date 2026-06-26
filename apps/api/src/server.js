@@ -52,7 +52,9 @@ async function checkAgent() {
     const response = await fetch(`${config.agentUrl.replace(/\/$/, "")}/health`);
     if (response.ok) {
       const data = await response.json();
-      serviceRegistry.agent = "ok";
+      if (serviceRegistry.agent !== "checking") {
+        serviceRegistry.agent = "ok";
+      }
       if (serviceRegistry.pinecone !== "checking") {
         serviceRegistry.pinecone = data.pinecone ? "ok" : "down";
       }
@@ -61,21 +63,13 @@ async function checkAgent() {
       }
     } else {
       serviceRegistry.agent = "down";
-      if (serviceRegistry.pinecone !== "checking") {
-        serviceRegistry.pinecone = "down";
-      }
-      if (serviceRegistry.groq !== "checking") {
-        serviceRegistry.groq = "down";
-      }
+      serviceRegistry.pinecone = "down";
+      serviceRegistry.groq = "down";
     }
   } catch (err) {
     serviceRegistry.agent = "down";
-    if (serviceRegistry.pinecone !== "checking") {
-      serviceRegistry.pinecone = "down";
-    }
-    if (serviceRegistry.groq !== "checking") {
-      serviceRegistry.groq = "down";
-    }
+    serviceRegistry.pinecone = "down";
+    serviceRegistry.groq = "down";
   }
 }
 
