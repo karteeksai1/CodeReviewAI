@@ -17,8 +17,87 @@ SKIP_DIRS = {".git", "node_modules", ".venv", "venv", "__pycache__", ".next", "d
 TEXT_EXTENSIONS = {".js", ".jsx", ".ts", ".tsx", ".py", ".go", ".java", ".rb", ".php", ".rs", ".sql", ".md", ".json", ".yml", ".yaml"}
 
 
+import structlog
+logger = structlog.get_logger()
+
+JS_KEYWORDS = {
+    "if", "for", "while", "switch", "catch", "constructor", "function", "class", 
+    "const", "let", "var", "import", "export", "default", "return", "await", 
+    "typeof", "instanceof", "yield"
+}
+
+
+def get_file_language(path: str) -> str | None:
+    ext = Path(path).suffix.lower()
+    if ext in {".py"}:
+        return "python"
+    elif ext in {".js", ".jsx", ".ts", ".tsx"}:
+        return "javascript/typescript"
+    return None
+
+
+def extract_symbol_name(line: str, lang: str) -> str | None:
+    if lang == "python":
+        m_def = re.match(r"\s*(?:async\s+)?def\s+([a-zA-Z_][a-zA-Z0-9_]*)", line)
+        if m_def:
+            return m_def.group(1)
+        m_cls = re.match(r"\s*class\s+([a-zA-Z_][a-zA-Z0-9_]*)", line)
+        if m_cls:
+            return m_cls.group(1)
+    elif lang == "javascript/typescript":
+        m_func = re.match(r"\s*(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s+([a-zA-Z_][a-zA-Z0-9_]*)", line)
+        if m_func:
+            return m_func.group(1)
+        m_cls = re.match(r"\s*(?:export\s+)?(?:default\s+)?class\s+([a-zA-Z_][a-zA-Z0-9_]*)", line)
+        if m_cls:
+            return m_cls.group(1)
+        m_arrow = re.match(r"\s*(?:export\s+)?(?:const|let|var)\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*(?:async\s*)?\(", line)
+        if m_arrow:
+            return m_arrow.group(1)
+        m_type = re.match(r"\s*(?:export\s+)?(?:type|interface)\s+([a-zA-Z_][a-zA-Z0-9_]*)", line)
+        if m_type:
+            return m_type.group(1)
+        m_method = re.match(r"\s*(?:async\s+)?([a-zA-Z_][a-zA-Z0-9_]*)\s*\(", line)
+        if m_method:
+            name = m_method.group(1)
+            if name not in JS_KEYWORDS:
+                return name
+    return None
+
+
+def detect_signature_changes(path: str, patch: str) -> list[str]:
+    lang = get_file_language(path)
+    if not lang:
+        return []
+    removed_defs = {}
+    added_defs = {}
+    lines = patch.splitlines()
+    for line in lines:
+        if line.startswith("---") or line.startswith("+++"):
+            continue
+        if line.startswith("-"):
+            line_content = line[1:]
+            symbol = extract_symbol_name(line_content, lang)
+            if symbol:
+                removed_defs[symbol] = line_content.strip()
+        elif line.startswith("+"):
+            line_content = line[1:]
+            symbol = extract_symbol_name(line_content, lang)
+            if symbol:
+                added_defs[symbol] = line_content.strip()
+    changed = []
+    for symbol, old_def in removed_defs.items():
+        if symbol in added_defs:
+            if old_def != added_defs[symbol]:
+                changed.append(symbol)
+        else:
+            changed.append(symbol)
+    return changed
+
+
 def tokenize(text: str) -> list[str]:
     return [token.lower() for token in re.findall(r"[a-zA-Z0-9_]+", text)]
+
 
 
 def embedding_dimensions() -> int:
@@ -104,11 +183,12 @@ async def index_repository(repo_path, namespace):
     for source_file in iter_source_files(local_path):
         rel_path = str(Path(source_file).relative_to(local_path))
         text = source_file.read_text(encoding="utf8", errors="ignore")
+        ext = Path(source_file).suffix.lower()
         for index, chunk in enumerate(chunk_text(text)):
             vectors.append({
                 "id": f"{rel_path}:{index}".replace("/", "__"),
                 "values": await embed_text(chunk),
-                "metadata": {"path": rel_path, "chunk_index": index, "bm25_terms": tokenize(chunk)[:300], "text": chunk[:3500]},
+                "metadata": {"path": rel_path, "chunk_index": index, "bm25_terms": tokenize(chunk)[:300], "text": chunk[:3500], "extension": ext},
             })
     client = get_pinecone()
     if client and vectors:
@@ -132,17 +212,20 @@ def get_pinecone():
         return None
 
 
-async def retrieve_context(namespace, query, limit=3):
+async def retrieve_context(namespace, query, limit=3, extension=None):
     client = get_pinecone()
     if not client:
         return []
     try:
+        q_filter = {"bm25_terms": {"$in": tokenize(query)[:20]}}
+        if extension:
+            q_filter["extension"] = {"$eq": extension}
         result = client.Index(os.getenv("PINECONE_INDEX")).query(
             namespace=namespace,
             vector=await embed_text(query),
             top_k=limit,
             include_metadata=True,
-            filter={"bm25_terms": {"$in": tokenize(query)[:20]}},
+            filter=q_filter,
         )
         return [{"path": match.metadata.get("path"), "text": match.metadata.get("text", "")[:600], "score": match.score} for match in result.matches]
     except Exception:

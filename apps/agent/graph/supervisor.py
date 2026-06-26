@@ -191,6 +191,13 @@ async def run_review(payload: dict[str, Any]) -> dict[str, Any]:
     duration_ms = int((perf_counter() - timer) * 1000)
     planned = set(final_state.get("agent_plan", ["security", "performance", "style"]))
     findings = final_state.get("findings", [])
+    dep_latency = final_state.get("dependency_latency_ms", 0)
+    logger.info(
+        "Review run complete",
+        total_duration_ms=duration_ms,
+        dependency_latency_ms=dep_latency,
+        planned=list(planned)
+    )
     agent_runs = [
         {
             "agent": agent,
@@ -209,4 +216,5 @@ async def run_review(payload: dict[str, Any]) -> dict[str, Any]:
         "markdown": final_state.get("markdown", ""),
         "agent_plan": final_state.get("agent_plan", []),
         "agent_runs": agent_runs,
+        "dependency_latency_ms": dep_latency,
     }

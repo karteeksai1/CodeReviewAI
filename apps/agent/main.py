@@ -166,6 +166,7 @@ async def review(request: ReviewRequest, req: Request):
             "Agent review finished",
             request_id=req_id,
             latency_ms=latency,
+            dependency_latency_ms=result.get("dependency_latency_ms", 0),
             token_usage=token_usage_var.get(),
             agent_plan=result.get("agent_plan", [])
         )
