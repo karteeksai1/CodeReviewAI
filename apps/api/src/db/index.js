@@ -115,6 +115,7 @@ export async function initDb() {
     alter table indexing_jobs add column if not exists user_id bigint references users(id);
     alter table reviews add column if not exists mergeable boolean;
     alter table reviews add column if not exists mergeable_state text;
+    alter table reviews add column if not exists conflict_details text;
     create unique index if not exists findings_unique_idx on findings (review_id, category, severity, (coalesce(path, '')), (coalesce(line, 0)), title);
   `);
 
@@ -191,6 +192,8 @@ export async function updateReview(reviewId, fields) {
   if (fields.mergeable !== undefined) dbFields.mergeable = fields.mergeable;
   if (fields.mergeableState !== undefined) dbFields.mergeable_state = fields.mergeableState;
   if (fields.mergeable_state !== undefined) dbFields.mergeable_state = fields.mergeable_state;
+  if (fields.conflictDetails !== undefined) dbFields.conflict_details = fields.conflictDetails;
+  if (fields.conflict_details !== undefined) dbFields.conflict_details = fields.conflict_details;
 
   const keys = Object.keys(dbFields);
   const values = Object.values(dbFields);

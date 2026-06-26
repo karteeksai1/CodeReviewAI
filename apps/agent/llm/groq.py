@@ -67,6 +67,7 @@ async def groq_json(system: str, user: str, *, temperature: float = 0.1, is_warm
 
     success = False
     try:
+        import asyncio
         payload = {
             "model": os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
             "temperature": temperature,
@@ -77,23 +78,35 @@ async def groq_json(system: str, user: str, *, temperature: float = 0.1, is_warm
             ],
         }
         timeout = httpx.Timeout(float(os.getenv("GROQ_TIMEOUT_SECONDS", "30")))
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            response = await client.post(
-                GROQ_CHAT_URL,
-                headers={"authorization": f"Bearer {api_key}", "content-type": "application/json"},
-                json=payload,
-            )
-            response.raise_for_status()
-        res_data = response.json()
-        usage = res_data.get("usage", {})
-        tokens = usage.get("total_tokens", 0)
-        token_usage_var.set(token_usage_var.get() + tokens)
-        content = res_data["choices"][0]["message"]["content"]
-        try:
-            success = True
-            return json.loads(content)
-        except json.JSONDecodeError:
-            return {}
+        for attempt in range(5):
+            try:
+                async with httpx.AsyncClient(timeout=timeout) as client:
+                    response = await client.post(
+                        GROQ_CHAT_URL,
+                        headers={"authorization": f"Bearer {api_key}", "content-type": "application/json"},
+                        json=payload,
+                    )
+                    response.raise_for_status()
+                res_data = response.json()
+                usage = res_data.get("usage", {})
+                tokens = usage.get("total_tokens", 0)
+                token_usage_var.set(token_usage_var.get() + tokens)
+                content = res_data["choices"][0]["message"]["content"]
+                try:
+                    success = True
+                    return json.loads(content)
+                except json.JSONDecodeError:
+                    return {}
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code == 429 and attempt < 4:
+                    await asyncio.sleep((attempt + 1) * 3)
+                    continue
+                raise e
+            except (httpx.ConnectError, httpx.TimeoutException) as e:
+                if attempt < 4:
+                    await asyncio.sleep((attempt + 1) * 3)
+                    continue
+                raise e
     except Exception as e:
         if is_real_run:
             await report_status("llm", "down")

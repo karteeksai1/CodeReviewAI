@@ -16,6 +16,7 @@ export type Review = {
   agent_runs?: AgentRun[];
   mergeable?: boolean | null;
   mergeable_state?: string | null;
+  conflict_details?: string | null;
 };
 
 export type Finding = {

@@ -78,7 +78,8 @@ const worker = new Worker(REVIEW_QUEUE_NAME, async (job) => {
     const context = await fetchPullRequestContext({ owner, repo, pullNumber: pullRequest.number, installationId });
     await updateReview(review?.id, {
       mergeable: context.pullRequest.mergeable,
-      mergeableState: context.pullRequest.mergeableState
+      mergeableState: context.pullRequest.mergeableState,
+      conflictDetails: context.pullRequest.conflictDetails
     });
     const agentResult = await requestAgentReview(context, requestId);
     const findings = agentResult.findings ?? [];

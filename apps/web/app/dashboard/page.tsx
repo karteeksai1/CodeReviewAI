@@ -705,7 +705,10 @@ function ReviewDetail({ review, onPipelineNodeClick }: { review: Review | null; 
       <p className="muted">{review.summary ?? review.title}</p>
       {(() => {
         const getBadge = () => {
-          if (review.mergeable === false) return { text: "⚠️ Has conflicts with main", className: "merge-conflict" };
+          if (review.mergeable === false) {
+            const detail = review.conflict_details ? ` — affected files: ${review.conflict_details}` : "";
+            return { text: `⚠️ Has conflicts with main${detail}`, className: "merge-conflict" };
+          }
           if (review.mergeable_state === "behind") return { text: "🔻 Behind main branch", className: "merge-behind" };
           if (review.mergeable_state === "blocked") return { text: "🔒 Blocked", className: "merge-blocked" };
           if (review.mergeable_state === "unstable") return { text: "⚠️ Unstable", className: "merge-unstable" };
