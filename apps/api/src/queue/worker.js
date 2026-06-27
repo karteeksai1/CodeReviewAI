@@ -5,7 +5,7 @@ import { createReview, initDb, insertFindings, query, updateReview, upsertAgentR
 import { logger } from "../logger.js";
 import { requestAgentReview } from "../services/agent-bridge.js";
 import { fetchPullRequestContext, postReviewSummary } from "../services/github.js";
-import { runDeterministicChecks } from "../services/deterministic-checks.js";
+import { runDeterministicChecks, deduplicateFindings, normalizeCategory } from "../services/deterministic-checks.js";
 import { connection, REVIEW_QUEUE_NAME } from "./index.js";
 
 await initDb();
@@ -89,11 +89,32 @@ const worker = new Worker(REVIEW_QUEUE_NAME, async (job) => {
       conflictDetails: context.pullRequest.conflictDetails
     });
     const agentResult = await requestAgentReview(context, requestId);
-    const findings = agentResult.findings ?? [];
+    const rawFindings = agentResult.findings ?? [];
     const deterministicFindings = runDeterministicChecks(context.files);
-    findings.push(...deterministicFindings);
+    rawFindings.push(...deterministicFindings);
+    const normalizedRaw = rawFindings.map((f) => ({
+      ...f,
+      category: normalizeCategory(f.category, f.title, f.body)
+    }));
+    const findings = deduplicateFindings(normalizedRaw);
     await insertFindings(review?.id, findings);
-    await upsertAgentRuns(review?.id, agentResult.agent_runs ?? []);
+    const finalAgentRuns = (agentResult.agent_runs ?? []).map((run) => {
+      let count = 0;
+      if (run.agent === "security") {
+        count = findings.filter((f) => f.category === "security").length;
+      } else if (run.agent === "performance") {
+        count = findings.filter((f) => f.category === "performance").length;
+      } else if (run.agent === "style") {
+        count = findings.filter((f) => f.category !== "security" && f.category !== "performance").length;
+      } else {
+        count = findings.filter((f) => f.category === run.agent).length;
+      }
+      return {
+        ...run,
+        finding_count: count
+      };
+    });
+    await upsertAgentRuns(review?.id, finalAgentRuns);
     let finalSummary = agentResult.summary;
     let finalRiskScore = agentResult.risk_score;
     if (deterministicFindings.length > 0) {

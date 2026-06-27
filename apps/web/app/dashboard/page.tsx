@@ -802,7 +802,7 @@ function ReviewDetail({ review, isLatest, onPipelineNodeClick }: { review: Revie
                 <span className="node-agent">{run.agent}</span>
                 <small className="node-meta">
                   {run.duration_ms ? `${(run.duration_ms / 1000).toFixed(2)}s` : "running"}
-                  {run.status === "completed" ? ` · ${run.finding_count} findings` : ` · ${run.status}`}
+                  {run.status === "completed" ? ` · ${run.finding_count} findings` : ` · ${run.status === "skipped" ? "no relevant changes" : run.status}`}
                 </small>
                 {run.status === "skipped" && (
                   <p className="node-skip-reason" style={{ margin: "4px 0 0", fontSize: "11px", color: "var(--muted)" }}>
@@ -945,8 +945,8 @@ function AgentsView({ agentRuns, initialFetching, setActiveTab, onRunClick, high
             </div>
             <div>{run.duration_ms ? `${(run.duration_ms / 1000).toFixed(2)}s` : "-"}</div>
             <div>
-              <span className={`badge ${run.status === "failed" ? "failed" : run.status === "completed" ? "" : "running"}`}>
-                {run.status === "completed" ? `${run.finding_count ?? 0} findings` : run.status}
+              <span className={badgeClass(run.status)}>
+                {run.status === "completed" ? `${run.finding_count ?? 0} findings` : run.status === "skipped" ? "no relevant changes" : run.status}
               </span>
             </div>
           </button>

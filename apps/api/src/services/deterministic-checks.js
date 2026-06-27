@@ -111,3 +111,85 @@ export function runDeterministicChecks(files) {
   }
   return findings;
 }
+
+export function deduplicateFindings(findings) {
+  const result = [];
+  const severityOrder = { critical: 5, high: 4, medium: 3, low: 2, info: 1 };
+  for (const item of findings) {
+    let merged = false;
+    for (let i = 0; i < result.length; i++) {
+      const existing = result[i];
+      const sameFile = (item.path || "") === (existing.path || "");
+      const hasLines = item.line !== null && item.line !== undefined && existing.line !== null && existing.line !== undefined;
+      const closeLines = hasLines && Math.abs(item.line - existing.line) <= 1;
+      if (sameFile && closeLines) {
+        const title1 = (item.title || "").toLowerCase();
+        const title2 = (existing.title || "").toLowerCase();
+        const body1 = (item.body || "").toLowerCase();
+        const body2 = (existing.body || "").toLowerCase();
+        const words1 = new Set(title1.split(/\W+/).filter(Boolean));
+        const words2 = new Set(title2.split(/\W+/).filter(Boolean));
+        const intersection = [...words1].filter(w => words2.has(w));
+        const overlappingTitle = intersection.length >= 2;
+        const isSecret1 = title1.includes("secret") || title1.includes("password") || title1.includes("credential") || title1.includes("token") || title1.includes("key");
+        const isSecret2 = title2.includes("secret") || title2.includes("password") || title2.includes("credential") || title2.includes("token") || title2.includes("key");
+        const bothSecret = isSecret1 && isSecret2;
+        const isSyntax1 = title1.includes("syntax") || title1.includes("parsing") || title1.includes("unresolved") || title1.includes("marker");
+        const isSyntax2 = title2.includes("syntax") || title2.includes("parsing") || title2.includes("unresolved") || title2.includes("marker");
+        const bothSyntax = isSyntax1 && isSyntax2;
+        if (overlappingTitle || bothSecret || bothSyntax) {
+          const sev1 = severityOrder[item.severity] || 0;
+          const sev2 = severityOrder[existing.severity] || 0;
+          if (sev1 > sev2) {
+            existing.severity = item.severity;
+          }
+          if (body1.length > body2.length) {
+            existing.title = item.title;
+            existing.body = item.body;
+          }
+          if (item.line < existing.line) {
+            existing.line = item.line;
+          }
+          merged = true;
+          break;
+        }
+      }
+    }
+    if (!merged) {
+      result.push({ ...item });
+    }
+  }
+  return result;
+}
+
+export function normalizeCategory(category, title, body) {
+  const cat = (category || "").trim().toLowerCase();
+  const t = (title || "").toLowerCase();
+  const b = (body || "").toLowerCase();
+  const isSecurity = 
+    cat.includes("security") || cat.includes("auth") || cat.includes("permission") || 
+    cat.includes("secret") || cat.includes("injection") || cat.includes("supply-chain") ||
+    cat.includes("exposure") ||
+    t.includes("password") || t.includes("secret") || t.includes("credential") || t.includes("token") || t.includes("key") || t.includes("auth") || t.includes("private") ||
+    b.includes("password") || b.includes("secret") || b.includes("credential") || b.includes("token") || b.includes("key") || b.includes("auth") || b.includes("private");
+  if (isSecurity) {
+    return "security";
+  }
+  if (cat === "security" || cat === "auth" || cat === "permission" || cat === "secret" || cat === "injection" || cat === "supply-chain" || cat.includes("exposure")) {
+    return "security";
+  }
+  if (cat === "performance" || cat.includes("memory") || cat.includes("concurrency") || cat.includes("n+1") || cat.includes("unbounded") || cat.includes("network")) {
+    return "performance";
+  }
+  if (cat === "style" || cat.includes("naming") || cat.includes("readability") || cat.includes("consistency") || cat.includes("practice") || cat.includes("maintain") || cat.includes("test") || cat.includes("quality")) {
+    return "style";
+  }
+  if (cat === "bug" || cat.includes("error") || cat.includes("syntax") || cat.includes("breakage")) {
+    return "bug";
+  }
+  if (cat === "conflict" || cat.includes("marker") || cat.includes("merge")) {
+    return "conflict";
+  }
+  console.warn(`[Warning] Category '${category}' is outside the allowed set, falling back to 'style'`);
+  return "style";
+}

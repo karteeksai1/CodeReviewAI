@@ -307,6 +307,26 @@ reviewsRouter.get("/:id", requireJwt, async (req, res, next) => {
       } catch (err) {}
     }
 
+    if (review) {
+      const findings = review.findings || [];
+      review.agent_runs = (review.agent_runs || []).map((run) => {
+        let count = 0;
+        if (run.agent === "security") {
+          count = findings.filter((f) => f.category === "security").length;
+        } else if (run.agent === "performance") {
+          count = findings.filter((f) => f.category === "performance").length;
+        } else if (run.agent === "style") {
+          count = findings.filter((f) => f.category !== "security" && f.category !== "performance").length;
+        } else {
+          count = findings.filter((f) => f.category === run.agent).length;
+        }
+        return {
+          ...run,
+          finding_count: count
+        };
+      });
+    }
+
     res.json({ review });
   } catch (err) {
     next(err);

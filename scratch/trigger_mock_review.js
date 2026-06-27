@@ -5,7 +5,7 @@ import { fileURLToPath } from "url";
 import crypto from "crypto";
 import { requestAgentReview } from "../apps/api/src/services/agent-bridge.js";
 import { createReview, initDb, insertFindings, query, updateReview, upsertAgentRuns, upsertPullRequest, upsertRepository } from "../apps/api/src/db/index.js";
-import { runDeterministicChecks } from "../apps/api/src/services/deterministic-checks.js";
+import { runDeterministicChecks, deduplicateFindings, normalizeCategory } from "../apps/api/src/services/deterministic-checks.js";
 
 const rootEnvPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../.env");
 dotenv.config({ path: rootEnvPath });
@@ -103,14 +103,35 @@ async function main() {
   const agentResult = await requestAgentReview(context, crypto.randomUUID());
   console.log("Agent result received.");
   
-  const findings = agentResult.findings ?? [];
+  const rawFindings = agentResult.findings ?? [];
   const deterministicFindings = runDeterministicChecks(files);
-  findings.push(...deterministicFindings);
+  rawFindings.push(...deterministicFindings);
+  const normalizedRaw = rawFindings.map((f) => ({
+    ...f,
+    category: normalizeCategory(f.category, f.title, f.body)
+  }));
+  const findings = deduplicateFindings(normalizedRaw);
   console.log("Findings count:", findings.length);
   console.log(JSON.stringify(findings, null, 2));
 
   await insertFindings(review.id, findings);
-  await upsertAgentRuns(review.id, agentResult.agent_runs ?? []);
+  const finalAgentRuns = (agentResult.agent_runs ?? []).map((run) => {
+    let count = 0;
+    if (run.agent === "security") {
+      count = findings.filter((f) => f.category === "security").length;
+    } else if (run.agent === "performance") {
+      count = findings.filter((f) => f.category === "performance").length;
+    } else if (run.agent === "style") {
+      count = findings.filter((f) => f.category !== "security" && f.category !== "performance").length;
+    } else {
+      count = findings.filter((f) => f.category === run.agent).length;
+    }
+    return {
+      ...run,
+      finding_count: count
+    };
+  });
+  await upsertAgentRuns(review.id, finalAgentRuns);
   
   let finalSummary = agentResult.summary;
   let finalRiskScore = agentResult.risk_score;

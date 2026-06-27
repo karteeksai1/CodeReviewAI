@@ -11,23 +11,24 @@ const pool = new pg.Pool({
 });
 
 async function main() {
-  const queryText = `
-    SELECT 
-      r.id, 
-      rep.full_name AS repo_name, 
-      pr.number AS pr_number, 
-      r.head_sha AS commit_sha, 
-      r.status, 
-      r.summary, 
-      r.created_at
-    FROM reviews r
-    JOIN pull_requests pr ON pr.id = r.pull_request_id
-    JOIN repositories rep ON rep.id = pr.repository_id
-    ORDER BY r.created_at DESC
-    LIMIT 15
-  `;
-  const reviews = await pool.query(queryText);
-  console.log(reviews.rows);
+  const latestRev = await pool.query("select * from reviews order by id desc limit 1");
+  const review = latestRev.rows[0];
+  console.log("Latest Review:", {
+    id: review.id,
+    status: review.status,
+    head_sha: review.head_sha
+  });
+  
+  const findings = await pool.query("select * from findings where review_id = $1", [review.id]);
+  console.log("Canonical findings count:", findings.rows.length);
+
+  const agentRuns = await pool.query("select * from agent_runs where review_id = $1", [review.id]);
+  console.log("Agent runs stored in DB:");
+  console.log(agentRuns.rows);
+  
+  const sumRuns = agentRuns.rows.reduce((sum, run) => sum + (run.finding_count || 0), 0);
+  console.log("Sum of agent runs findings:", sumRuns);
+
   await pool.end();
 }
 

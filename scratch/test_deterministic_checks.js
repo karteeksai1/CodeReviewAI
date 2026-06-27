@@ -1,4 +1,51 @@
-import { runDeterministicChecks } from "../apps/api/src/services/deterministic-checks.js";
+import { runDeterministicChecks, deduplicateFindings, normalizeCategory } from "../apps/api/src/services/deterministic-checks.js";
+
+const norm1 = normalizeCategory("Supply-Chain", "title", "body");
+if (norm1 !== "security") {
+  console.error("Supply-Chain mapping failed");
+  process.exit(1);
+}
+
+const norm2 = normalizeCategory("Readability", "Hardcoded API Key", "API key exposed");
+if (norm2 !== "security") {
+  console.error("Hardcoded credential category override failed");
+  process.exit(1);
+}
+
+const testFindings = [
+  {
+    category: "readability",
+    severity: "low",
+    title: "Magic String Key",
+    body: "The string contains a secret key.",
+    path: "app.js",
+    line: 10
+  },
+  {
+    category: "security",
+    severity: "critical",
+    title: "Hardcoded credential token",
+    body: "Extremely detailed description of security breach through hardcoded credential token.",
+    path: "app.js",
+    line: 10
+  }
+];
+
+const normalizedTest = testFindings.map(f => ({
+  ...f,
+  category: normalizeCategory(f.category, f.title, f.body)
+}));
+const deduped = deduplicateFindings(normalizedTest);
+
+if (deduped.length !== 1) {
+  console.error("Deduplication failed to merge duplicate secrets");
+  process.exit(1);
+}
+
+if (deduped[0].severity !== "critical" || deduped[0].category !== "security") {
+  console.error("Deduplication failed to merge metadata correctly", deduped[0]);
+  process.exit(1);
+}
 
 const jsCode = `
 const { sum } = require("./utils");

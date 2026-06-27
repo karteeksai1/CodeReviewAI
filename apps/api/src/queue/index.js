@@ -27,7 +27,8 @@ export async function enqueueReview(eventName, payload) {
     eventName,
     payload.repository?.full_name,
     payload.pull_request?.number ?? payload.after ?? payload.review?.id,
-    payload.pull_request?.head?.sha ?? payload.after ?? Date.now()
+    payload.pull_request?.head?.sha ?? payload.after ?? Date.now(),
+    payload.action === "reopened" ? "reopened" : ""
   ].filter(Boolean).join("-");
   return reviewQueue.add("review", { eventName, payload, enqueuedAt: new Date().toISOString() }, { jobId: dedupeId, priority });
 }
