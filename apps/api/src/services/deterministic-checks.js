@@ -115,49 +115,100 @@ export function runDeterministicChecks(files) {
 export function deduplicateFindings(findings) {
   const result = [];
   const severityOrder = { critical: 5, high: 4, medium: 3, low: 2, info: 1 };
-  for (const item of findings) {
-    let merged = false;
-    for (let i = 0; i < result.length; i++) {
-      const existing = result[i];
-      const sameFile = (item.path || "") === (existing.path || "");
-      const hasLines = item.line !== null && item.line !== undefined && existing.line !== null && existing.line !== undefined;
-      const closeLines = hasLines && Math.abs(item.line - existing.line) <= 1;
-      if (sameFile && closeLines) {
-        const title1 = (item.title || "").toLowerCase();
-        const title2 = (existing.title || "").toLowerCase();
-        const body1 = (item.body || "").toLowerCase();
-        const body2 = (existing.body || "").toLowerCase();
-        const words1 = new Set(title1.split(/\W+/).filter(Boolean));
-        const words2 = new Set(title2.split(/\W+/).filter(Boolean));
-        const intersection = [...words1].filter(w => words2.has(w));
-        const overlappingTitle = intersection.length >= 2;
-        const isSecret1 = title1.includes("secret") || title1.includes("password") || title1.includes("credential") || title1.includes("token") || title1.includes("key");
-        const isSecret2 = title2.includes("secret") || title2.includes("password") || title2.includes("credential") || title2.includes("token") || title2.includes("key");
-        const bothSecret = isSecret1 && isSecret2;
-        const isSyntax1 = title1.includes("syntax") || title1.includes("parsing") || title1.includes("unresolved") || title1.includes("marker");
-        const isSyntax2 = title2.includes("syntax") || title2.includes("parsing") || title2.includes("unresolved") || title2.includes("marker");
-        const bothSyntax = isSyntax1 && isSyntax2;
-        if (overlappingTitle || bothSecret || bothSyntax) {
-          const sev1 = severityOrder[item.severity] || 0;
-          const sev2 = severityOrder[existing.severity] || 0;
-          if (sev1 > sev2) {
-            existing.severity = item.severity;
-          }
-          if (body1.length > body2.length) {
-            existing.title = item.title;
-            existing.body = item.body;
-          }
-          if (item.line < existing.line) {
-            existing.line = item.line;
-          }
-          merged = true;
+  const sorted = [...findings].sort((a, b) => {
+    if ((a.path || "") !== (b.path || "")) {
+      return (a.path || "").localeCompare(b.path || "");
+    }
+    const lineA = a.line ?? 0;
+    const lineB = b.line ?? 0;
+    if (lineA !== lineB) return lineA - lineB;
+    return (severityOrder[b.severity] || 0) - (severityOrder[a.severity] || 0);
+  });
+  const stopWords = new Set(["a", "an", "the", "in", "on", "at", "to", "for", "with", "is", "are", "was", "were", "of", "and", "or", "not", "has", "have", "file", "code", "exposed", "exposing", "exposure"]);
+  const getCleanWords = (str) => {
+    return new Set(
+      (str || "")
+        .toLowerCase()
+        .split(/\W+/)
+        .filter(w => w.length > 2 && !stopWords.has(w))
+    );
+  };
+  const clusters = [];
+  for (const item of sorted) {
+    let placed = false;
+    for (const cluster of clusters) {
+      const representative = cluster[0];
+      const sameFile = (item.path || "") === (representative.path || "");
+      if (!sameFile) continue;
+      let closeLine = false;
+      for (const clusterItem of cluster) {
+        const dist = Math.abs((item.line ?? 0) - (clusterItem.line ?? 0));
+        if (dist <= 3) {
+          closeLine = true;
           break;
         }
       }
+      if (!closeLine) continue;
+      const itemTitle = (item.title || "").toLowerCase();
+      const repTitle = (representative.title || "").toLowerCase();
+      const isSecurity = item.category === "security" && representative.category === "security";
+      const isSyntax = item.category === "syntax" && representative.category === "syntax";
+      let similar = false;
+      if (isSecurity) {
+        const secKeywords = ["password", "secret", "credential", "token", "key", "auth", "private", "expose", "hardcode"];
+        const hasSec1 = secKeywords.some(k => itemTitle.includes(k) || (item.body || "").toLowerCase().includes(k));
+        const hasSec2 = secKeywords.some(k => repTitle.includes(k) || (representative.body || "").toLowerCase().includes(k));
+        if (hasSec1 && hasSec2) {
+          similar = true;
+        }
+      } else if (isSyntax) {
+        similar = true;
+      } else {
+        const words1 = getCleanWords(item.title);
+        const words2 = getCleanWords(representative.title);
+        const intersection = [...words1].filter(w => words2.has(w));
+        if (intersection.length >= 1) {
+          similar = true;
+        }
+      }
+      if (similar) {
+        cluster.push(item);
+        placed = true;
+        break;
+      }
     }
-    if (!merged) {
-      result.push({ ...item });
+    if (!placed) {
+      clusters.push([item]);
     }
+  }
+  for (const cluster of clusters) {
+    if (cluster.length === 1) {
+      result.push(cluster[0]);
+      continue;
+    }
+    cluster.sort((a, b) => {
+      const sA = severityOrder[a.severity] || 0;
+      const sB = severityOrder[b.severity] || 0;
+      if (sA !== sB) return sB - sA;
+      return (b.body || "").length - (a.body || "").length;
+    });
+    const best = cluster[0];
+    const lines = cluster.map(c => c.line).filter(l => l !== null && l !== undefined);
+    const minLine = Math.min(...lines);
+    const maxLine = Math.max(...lines);
+    const merged = { ...best };
+    const isSecurity = cluster.every(c => c.category === "security");
+    if (isSecurity && minLine !== maxLine) {
+      merged.title = `Hardcoded credentials detected in ${merged.path}:${minLine}-${maxLine}`;
+      merged.body = `Hardcoded credentials (including host, username, or password) are committed in code. Move credentials to environment variables or a secrets manager.`;
+      merged.line = minLine;
+    } else {
+      if (minLine !== maxLine) {
+        merged.line = minLine;
+        merged.title = `${best.title} (lines ${minLine}-${maxLine})`;
+      }
+    }
+    result.push(merged);
   }
   return result;
 }

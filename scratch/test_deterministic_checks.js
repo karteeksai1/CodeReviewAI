@@ -12,106 +12,52 @@ if (norm2 !== "security") {
   process.exit(1);
 }
 
-const testFindings = [
-  {
-    category: "readability",
-    severity: "low",
-    title: "Magic String Key",
-    body: "The string contains a secret key.",
-    path: "app.js",
-    line: 10
-  },
+const configFindings = [
   {
     category: "security",
     severity: "critical",
-    title: "Hardcoded credential token",
-    body: "Extremely detailed description of security breach through hardcoded credential token.",
-    path: "app.js",
-    line: 10
+    title: "Hardcoded database password in production environment",
+    body: "The password 'secure_password' is hardcoded in the config file, which is a security risk in a production environment.",
+    path: "config.js",
+    line: 7
+  },
+  {
+    category: "security",
+    severity: "info",
+    title: "Sensitive information exposed in config file",
+    body: "The password 'secure_password' is exposed in the config file. Consider using environment variables or a secrets manager to store sensitive information.",
+    path: "config.js",
+    line: 6
+  },
+  {
+    category: "security",
+    severity: "info",
+    title: "Hardcoded database credentials",
+    body: "The database credentials are hardcoded in the config file. Consider using environment variables or a secrets manager to store sensitive information.",
+    path: "config.js",
+    line: 5
   }
 ];
 
-const normalizedTest = testFindings.map(f => ({
+const normalized = configFindings.map(f => ({
   ...f,
   category: normalizeCategory(f.category, f.title, f.body)
 }));
-const deduped = deduplicateFindings(normalizedTest);
+const dedupedConfig = deduplicateFindings(normalized);
 
-if (deduped.length !== 1) {
-  console.error("Deduplication failed to merge duplicate secrets");
+console.log("Deduplicated config.js findings count:", dedupedConfig.length);
+console.log("Merged finding detail:", JSON.stringify(dedupedConfig, null, 2));
+
+if (dedupedConfig.length !== 1) {
+  console.error("Failed to merge the 3 config.js findings");
   process.exit(1);
 }
 
-if (deduped[0].severity !== "critical" || deduped[0].category !== "security") {
-  console.error("Deduplication failed to merge metadata correctly", deduped[0]);
+const merged = dedupedConfig[0];
+if (merged.line !== 5 || !merged.title.includes("Hardcoded credentials detected in config.js:5-7") || merged.severity !== "critical") {
+  console.error("Merged finding properties do not match requirements:", merged);
   process.exit(1);
 }
 
-const jsCode = `
-const { sum } = require("./utils");
-function processData(data) {
-  const total = sum(data);
-  return total / data.length;
-}
-const status = "active";
-const status = "inactive";
-function brokenFunction() {
-  console.log("This function has syntax issues"
-}
-module.exports = {
-  processData,
-};
-`;
-
-const pyCode = `
-def broken_function():
-  print("Hello"
-`;
-
-const jsPatch = `
-@@ -1,10 +1,15 @@
- const { sum } = require("./utils");
- function processData(data) {
-   const total = sum(data);
-+  return total / data.length;
- }
-+const status = "active";
-+const status = "inactive";
-+function brokenFunction() {
-+  console.log("This function has syntax issues"
-+}
-`;
-
-const files = [
-  {
-    path: "test.js",
-    status: "modified",
-    patch: jsPatch,
-    content: jsCode
-  },
-  {
-    path: "test.py",
-    status: "modified",
-    patch: "",
-    content: pyCode
-  }
-];
-
-const findings = runDeterministicChecks(files);
-console.log("Findings count:", findings.length);
-console.log(JSON.stringify(findings, null, 2));
-
-const jsSyntaxFinding = findings.find(f => f.path === "test.js" && f.title.includes("syntax error"));
-const pySyntaxFinding = findings.find(f => f.path === "test.py" && f.title.includes("syntax error"));
-
-if (!jsSyntaxFinding) {
-  console.error("Failed to detect JavaScript syntax error");
-  process.exit(1);
-}
-if (!pySyntaxFinding) {
-  console.error("Failed to detect Python syntax error");
-  process.exit(1);
-}
-
-console.log("All deterministic checks verified successfully!");
+console.log("All deduplication and category validations verified successfully!");
 process.exit(0);

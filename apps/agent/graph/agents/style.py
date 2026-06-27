@@ -71,7 +71,8 @@ async def _groq_style_findings(state, context_str):
         "Strict Precision Rules: "
         "1. Do NOT emit a finding if your analysis concludes the issue does not apply, is not present, or is not applicable. Only emit findings for issues actually identified in the code. "
         "2. Do NOT emit hypothetical or generic findings unless you have concrete justification grounded in the actual code/diff showing a real, material risk. "
-        "3. Do NOT double-count issues already flagged or primarily belonging to other categories (like performance or security). For example, do not flag a linear search as maintainability if it is already flagged as a performance issue."
+        "3. Do NOT double-count issues already flagged or primarily belonging to other categories (like performance or security). For example, do not flag a linear search as maintainability if it is already flagged as a performance issue. "
+        "4. Do NOT emit naming or readability findings unless there is a concrete, demonstrable problem (e.g. the variable name is misleading relative to its actual content, violates a clear codebase convention, or is genuinely ambiguous and confusing in context). Common idiomatic names like 'config', 'data', 'total', 'results', 'manager' are perfectly valid. 'Could be more descriptive' or 'a more specific name is preferred' is not sufficient grounds for a finding."
     )
     user = (
         f"Repository: {state.get('repository', {}).get('fullName')}\n"

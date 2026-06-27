@@ -66,6 +66,22 @@ async function main() {
 +}`
     },
     {
+      path: "config.js",
+      status: "modified",
+      additions: 10,
+      deletions: 0,
+      changes: 10,
+      patch: `@@ -1,3 +1,10 @@
++const config = {
++  host: "localhost",
++  port: 5432
++};
++const a = 123;
++function processConfig(c) {
++  return c;
++}`
+    },
+    {
       path: "deleted_file.js",
       status: "removed",
       additions: 0,
