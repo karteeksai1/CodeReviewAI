@@ -10,7 +10,7 @@ async def style_agent(state):
     findings = []
     contexts = []
     namespace = state.get("repository", {}).get("fullName", "").replace("/", "__")
-    last_added_return_by_path = {}
+    return_indent_by_path = {}
     declared_by_path = collect_declared_identifiers(state.get("files", []))
     
     unique_files = {file.get("path") for file in state.get("files", []) if file.get("path") and file.get("status") != "removed"}
@@ -32,6 +32,7 @@ async def style_agent(state):
         context = file_contexts.get(path, [])
         lower = code.lower()
         is_js = is_javascript_path(path)
+        indent = len(code) - len(code.lstrip())
         
         if len(code) > 140:
             findings.append(finding("style", "low", "Line is difficult to scan", "Break the expression into named parts.", file, line, 0.7, rag_context=context))
@@ -44,9 +45,17 @@ async def style_agent(state):
             findings.append(finding("style", "high", "Implicit global assignment", "This assignment has no const, let, or var declaration, so it can create or overwrite a global variable. Declare the variable explicitly.", file, line, 0.84, rag_context=context))
         if is_js and re.search(r"\bnew\s+Buffer\s*\(", code):
             findings.append(finding("style", "medium", "Deprecated Buffer constructor", "The bare Buffer constructor is deprecated and can be unsafe. Use Buffer.from() or Buffer.alloc() instead.", file, line, 0.86, rag_context=context))
-        if is_js and re.search(r"console\.log\s*\(", code) and last_added_return_by_path.get(path):
-            findings.append(finding("style", "medium", "Unreachable code after return", "This statement appears immediately after a return in the same added block, so it will never execute. Remove it or move it before the return.", file, line, 0.8, rag_context=context))
-        last_added_return_by_path[path] = lower.strip().startswith("return ")
+            
+        ret_indent = return_indent_by_path.get(path)
+        if ret_indent is not None:
+            if indent < ret_indent:
+                return_indent_by_path[path] = None
+            else:
+                if is_js and re.search(r"console\.log\s*\(", code):
+                    findings.append(finding("style", "medium", "Unreachable code after return", "This statement appears immediately after a return in the same added block, so it will never execute. Remove it or move it before the return.", file, line, 0.8, rag_context=context))
+                return_indent_by_path[path] = None
+        if lower.strip().startswith("return"):
+            return_indent_by_path[path] = indent
             
     context_str = "\n".join(set(contexts))
     llm_findings = await _groq_style_findings(state, context_str)

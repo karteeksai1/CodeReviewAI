@@ -65,7 +65,13 @@ const worker = new Worker(REVIEW_QUEUE_NAME, async (job) => {
       startedAt: new Date()
     })));
   } else {
-    review = await createReview({ pullRequestId: prRow?.id, queueJobId: String(job.id), status: "in_progress" });
+    review = await createReview({
+      pullRequestId: prRow?.id,
+      queueJobId: String(job.id),
+      status: "in_progress",
+      headSha: pullRequest.head?.sha,
+      baseSha: pullRequest.base?.sha
+    });
     await upsertAgentRuns(review?.id, ["security", "performance", "style"].map((agent) => ({
       agent,
       status: "running",

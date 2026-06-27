@@ -183,6 +183,25 @@ export default function Home() {
     };
   }, [token]);
 
+  useEffect(() => {
+    if (!token || !owner.trim() || !repo.trim() || !number.trim() || !prNumberValid) return;
+    const hasActiveReview = reviews.some(r => r.status === "in_progress" || r.status === "queued" || r.status.startsWith("retrying"));
+    if (!hasActiveReview) return;
+    const timer = setInterval(async () => {
+      try {
+        const data = await fetchReviews(owner.trim(), repo.trim(), number.trim(), token);
+        setReviews(data.reviews);
+        if (selectedReview) {
+          const updatedSelected = data.reviews.find((r) => r.id === selectedReview.id);
+          if (updatedSelected) {
+            setSelectedReview(updatedSelected);
+          }
+        }
+      } catch {}
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [reviews, token, owner, repo, number, prNumberValid, selectedReview]);
+
   const handleAgentRunClick = async (fullName: string, prNumber: number) => {
     const [ownerPart, repoPart] = fullName.split("/");
     setOwner(ownerPart);
@@ -750,6 +769,11 @@ function ReviewDetail({ review, isLatest, onPipelineNodeClick }: { review: Revie
           if (review.mergeable_state === "blocked") return { text: "🔒 Blocked", className: "merge-blocked" };
           if (review.mergeable_state === "unstable") return { text: "⚠️ Unstable", className: "merge-unstable" };
           if (review.mergeable === true) return { text: "✅ Mergeable", className: "merge-clean" };
+          const createdTime = new Date(review.created_at).getTime();
+          const isStale = Date.now() - createdTime > 120000;
+          if (isStale) {
+            return { text: "❓ Mergeability unknown", className: "merge-unknown" };
+          }
           return { text: "⏳ Checking mergeability...", className: "merge-checking" };
         };
         const badge = getBadge();

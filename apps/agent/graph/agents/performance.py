@@ -15,7 +15,7 @@ async def performance_agent(state):
     findings = []
     contexts = []
     namespace = state.get("repository", {}).get("fullName", "").replace("/", "__")
-    in_loop = False
+    loop_indent_by_path = {}
     
     unique_files = {file.get("path") for file in state.get("files", []) if file.get("path") and file.get("status") != "removed"}
     file_contexts = {}
@@ -35,11 +35,17 @@ async def performance_agent(state):
         lower = code.strip().lower()
         path = file.get("path")
         context = file_contexts.get(path, [])
-        
-        if re.match(r"(for|while)\b", lower):
-            in_loop = True
-        if in_loop and ("await " in lower or ".query(" in lower or ".find(" in lower):
-            findings.append(finding("performance", "medium", "Possible N+1 work inside a loop", "Batch, preload, or move async/database work outside the loop.", file, line, 0.78, rag_context=context))
+        indent = len(code) - len(code.lstrip())
+        loop_indent = loop_indent_by_path.get(path)
+        if loop_indent is not None and indent <= loop_indent:
+            loop_indent_by_path[path] = None
+            loop_indent = None
+        if re.search(r"\b(for|while)\b", lower):
+            loop_indent_by_path[path] = indent
+            loop_indent = indent
+        if loop_indent is not None and ("await " in lower or ".query(" in lower or ".find(" in lower):
+            if not re.search(r"\b(for|while)\b", lower):
+                findings.append(finding("performance", "medium", "Possible N+1 work inside a loop", "Batch, preload, or move async/database work outside the loop.", file, line, 0.78, rag_context=context))
         if "select *" in lower:
             findings.append(finding("performance", "low", "Unbounded column selection", "Prefer explicit columns for hot paths.", file, line, 0.66, rag_context=context))
             

@@ -39,7 +39,9 @@ async function main() {
   const review = await createReview({
     pullRequestId: prRow.id,
     queueJobId: jobId,
-    status: "in_progress"
+    status: "in_progress",
+    headSha: pullRequest.head?.sha,
+    baseSha: pullRequest.base?.sha
   });
 
   const files = [

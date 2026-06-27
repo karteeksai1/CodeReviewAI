@@ -1105,6 +1105,11 @@ a { color: inherit; }
   border-color: rgba(59, 130, 246, 0.2);
   animation: pulse-checking 2s infinite ease-in-out;
 }
+.merge-badge.merge-unknown {
+  background: rgba(107, 114, 128, 0.08);
+  color: #4b5563;
+  border-color: rgba(107, 114, 128, 0.2);
+}
 @keyframes pulse-checking {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.6; }

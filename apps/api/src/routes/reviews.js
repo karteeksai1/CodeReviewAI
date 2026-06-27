@@ -15,7 +15,7 @@ import {
 } from "../db/index.js";
 import { requireJwt } from "../middleware/auth.js";
 import { reviewQueue } from "../queue/index.js";
-import { getInstallationOctokit } from "../services/github.js";
+import { getInstallationOctokit, getChangedLineRanges } from "../services/github.js";
 
 export const reviewsRouter = express.Router();
 
@@ -269,7 +269,28 @@ reviewsRouter.get("/:id", requireJwt, async (req, res, next) => {
               const baseFileNames = baseCompareRes.data.files?.map((file) => file.filename) || [];
               const intersected = prFileNames.filter((file) => baseFileNames.includes(file));
               if (intersected.length > 0) {
-                conflictDetails = intersected.join(", ");
+                const detailedFiles = [];
+                for (const file of intersected) {
+                  const prFile = files.find((f) => f.filename === file);
+                  const baseFile = baseCompareRes.data.files?.find((f) => f.filename === file);
+                  const prPatch = prFile?.patch || "";
+                  const basePatch = baseFile?.patch || "";
+                  const prRanges = getChangedLineRanges(prPatch);
+                  const baseRanges = getChangedLineRanges(basePatch);
+                  const parts = [];
+                  if (prRanges.length > 0) {
+                    parts.push(`PR lines ${prRanges.join(", ")}`);
+                  }
+                  if (baseRanges.length > 0) {
+                    parts.push(`main lines ${baseRanges.join(", ")}`);
+                  }
+                  if (parts.length > 0) {
+                    detailedFiles.push(`${file} (${parts.join(", ")})`);
+                  } else {
+                    detailedFiles.push(file);
+                  }
+                }
+                conflictDetails = detailedFiles.join(", ");
               }
             }
           } catch (err) {}

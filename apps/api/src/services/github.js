@@ -15,6 +15,55 @@ export async function getInstallationOctokit(installationId) {
   return new Octokit({ auth: installationAuth.token });
 }
 
+export function getChangedLineRanges(patch) {
+  const ranges = [];
+  if (!patch) return ranges;
+  const lines = patch.split("\n");
+  let currentLine = null;
+  let rangeStart = null;
+  let rangeEnd = null;
+  for (const line of lines) {
+    if (line.startsWith("---") || line.startsWith("+++")) {
+      continue;
+    }
+    const match = line.match(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/);
+    if (match) {
+      if (rangeStart !== null) {
+        ranges.push(rangeStart === rangeEnd ? `${rangeStart}` : `${rangeStart}-${rangeEnd}`);
+        rangeStart = null;
+        rangeEnd = null;
+      }
+      currentLine = parseInt(match[1], 10);
+      continue;
+    }
+    if (currentLine !== null) {
+      if (line.startsWith("+")) {
+        if (rangeStart === null) {
+          rangeStart = currentLine;
+        }
+        rangeEnd = currentLine;
+        currentLine++;
+      } else if (line.startsWith("-")) {
+        if (rangeStart === null) {
+          rangeStart = currentLine;
+        }
+        rangeEnd = currentLine;
+      } else if (line.startsWith(" ")) {
+        if (rangeStart !== null) {
+          ranges.push(rangeStart === rangeEnd ? `${rangeStart}` : `${rangeStart}-${rangeEnd}`);
+          rangeStart = null;
+          rangeEnd = null;
+        }
+        currentLine++;
+      }
+    }
+  }
+  if (rangeStart !== null) {
+    ranges.push(rangeStart === rangeEnd ? `${rangeStart}` : `${rangeStart}-${rangeEnd}`);
+  }
+  return ranges;
+}
+
 export async function fetchPullRequestContext({ owner, repo, pullNumber, installationId }) {
   const octokit = await getInstallationOctokit(installationId);
   const [{ data: initialPr }, { data: files }, diffResponse] = await Promise.all([
@@ -63,7 +112,28 @@ export async function fetchPullRequestContext({ owner, repo, pullNumber, install
         const baseFileNames = baseCompareRes.data.files?.map((file) => file.filename) || [];
         const intersected = prFileNames.filter((file) => baseFileNames.includes(file));
         if (intersected.length > 0) {
-          conflictDetails = intersected.join(", ");
+          const detailedFiles = [];
+          for (const file of intersected) {
+            const prFile = files.find((f) => f.filename === file);
+            const baseFile = baseCompareRes.data.files?.find((f) => f.filename === file);
+            const prPatch = prFile?.patch || "";
+            const basePatch = baseFile?.patch || "";
+            const prRanges = getChangedLineRanges(prPatch);
+            const baseRanges = getChangedLineRanges(basePatch);
+            const parts = [];
+            if (prRanges.length > 0) {
+              parts.push(`PR lines ${prRanges.join(", ")}`);
+            }
+            if (baseRanges.length > 0) {
+              parts.push(`main lines ${baseRanges.join(", ")}`);
+            }
+            if (parts.length > 0) {
+              detailedFiles.push(`${file} (${parts.join(", ")})`);
+            } else {
+              detailedFiles.push(file);
+            }
+          }
+          conflictDetails = detailedFiles.join(", ");
         }
       }
     } catch (err) {

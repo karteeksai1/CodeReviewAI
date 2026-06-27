@@ -116,7 +116,13 @@ export async function initDb() {
     alter table reviews add column if not exists mergeable boolean;
     alter table reviews add column if not exists mergeable_state text;
     alter table reviews add column if not exists conflict_details text;
+    alter table reviews add column if not exists head_sha text;
+    alter table reviews add column if not exists base_sha text;
     create unique index if not exists findings_unique_idx on findings (review_id, category, severity, (coalesce(path, '')), (coalesce(line, 0)), title);
+  `);
+
+  await query(`
+    update reviews set head_sha = pr.head_sha, base_sha = pr.base_sha from pull_requests pr where pr.id = reviews.pull_request_id and reviews.head_sha is null;
   `);
 
   await seedDefaultAdmin();
@@ -168,11 +174,11 @@ export async function upsertPullRequest(repositoryId, pr) {
   return result.rows[0];
 }
 
-export async function createReview({ pullRequestId, queueJobId, status }) {
+export async function createReview({ pullRequestId, queueJobId, status, headSha, baseSha }) {
   if (!pool || !pullRequestId) return null;
   const result = await query(
-    "insert into reviews (pull_request_id, queue_job_id, status, started_at) values ($1,$2,$3,now()) returning *",
-    [pullRequestId, queueJobId, status]
+    "insert into reviews (pull_request_id, queue_job_id, status, started_at, head_sha, base_sha) values ($1,$2,$3,now(),$4,$5) returning *",
+    [pullRequestId, queueJobId, status, headSha, baseSha]
   );
   return result.rows[0];
 }
@@ -194,6 +200,10 @@ export async function updateReview(reviewId, fields) {
   if (fields.mergeable_state !== undefined) dbFields.mergeable_state = fields.mergeable_state;
   if (fields.conflictDetails !== undefined) dbFields.conflict_details = fields.conflictDetails;
   if (fields.conflict_details !== undefined) dbFields.conflict_details = fields.conflict_details;
+  if (fields.headSha !== undefined) dbFields.head_sha = fields.headSha;
+  if (fields.head_sha !== undefined) dbFields.head_sha = fields.head_sha;
+  if (fields.baseSha !== undefined) dbFields.base_sha = fields.baseSha;
+  if (fields.base_sha !== undefined) dbFields.base_sha = fields.base_sha;
 
   const keys = Object.keys(dbFields);
   const values = Object.values(dbFields);
@@ -397,8 +407,6 @@ export async function getReviewDetail(userId, reviewId) {
        r.*,
        pr.number,
        pr.title,
-       pr.head_sha,
-       pr.base_sha,
        repositories.full_name,
        coalesce(json_agg(distinct f.*) filter (where f.id is not null), '[]'::json) as findings,
        coalesce(json_agg(distinct ar.*) filter (where ar.id is not null), '[]'::json) as agent_runs
@@ -408,7 +416,7 @@ export async function getReviewDetail(userId, reviewId) {
      left join findings f on f.review_id = r.id
      left join agent_runs ar on ar.review_id = r.id
      where r.id = $2 and repositories.user_id = $1
-     group by r.id, pr.number, pr.title, pr.head_sha, pr.base_sha, repositories.full_name`,
+     group by r.id, pr.number, pr.title, repositories.full_name`,
     [userId, Number(reviewId)]
   );
   return result.rows[0] ?? null;
@@ -456,14 +464,14 @@ export async function listReviewsByPr({ userId, owner, repo, number }) {
     throw err;
   }
   const result = await query(
-    `select r.*, pr.number, pr.title, pr.head_sha, pr.base_sha, repositories.full_name,
+    `select r.*, pr.number, pr.title, repositories.full_name,
       coalesce(json_agg(f.* order by f.created_at) filter (where f.id is not null), '[]'::json) as findings
      from reviews r
      join pull_requests pr on pr.id = r.pull_request_id
      join repositories on repositories.id = pr.repository_id
      left join findings f on f.review_id = r.id
      where repositories.user_id = $1 and repositories.owner = $2 and repositories.name = $3 and pr.number = $4
-     group by r.id, pr.number, pr.title, pr.head_sha, pr.base_sha, repositories.full_name
+     group by r.id, pr.number, pr.title, repositories.full_name
      order by r.created_at desc`,
     [userId, owner, repo, prNumber]
   );

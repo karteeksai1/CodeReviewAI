@@ -19,6 +19,7 @@ export type Review = {
   conflict_details?: string | null;
   head_sha?: string | null;
   base_sha?: string | null;
+  created_at: string;
 };
 
 export type Finding = {
