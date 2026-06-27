@@ -5,6 +5,7 @@ import { createReview, initDb, insertFindings, query, updateReview, upsertAgentR
 import { logger } from "../logger.js";
 import { requestAgentReview } from "../services/agent-bridge.js";
 import { fetchPullRequestContext, postReviewSummary } from "../services/github.js";
+import { runDeterministicChecks } from "../services/deterministic-checks.js";
 import { connection, REVIEW_QUEUE_NAME } from "./index.js";
 
 await initDb();
@@ -89,11 +90,23 @@ const worker = new Worker(REVIEW_QUEUE_NAME, async (job) => {
     });
     const agentResult = await requestAgentReview(context, requestId);
     const findings = agentResult.findings ?? [];
+    const deterministicFindings = runDeterministicChecks(context.files);
+    findings.push(...deterministicFindings);
     await insertFindings(review?.id, findings);
     await upsertAgentRuns(review?.id, agentResult.agent_runs ?? []);
-    const posted = await postReviewSummary({ owner, repo, pullNumber: pullRequest.number, installationId, headSha: context.pullRequest.headSha, summary: agentResult.summary, findings, files: context.files });
-    await updateReview(review?.id, { status: "completed", summary: agentResult.summary, riskScore: agentResult.risk_score, postedToGithub: posted, completedAt: new Date() });
-    return { findings: findings.length, riskScore: agentResult.risk_score, posted };
+    let finalSummary = agentResult.summary;
+    let finalRiskScore = agentResult.risk_score;
+    if (deterministicFindings.length > 0) {
+      const severityWeights = { critical: 10, high: 7, medium: 4, low: 2, info: 0 };
+      const sumWeights = findings.reduce((sum, item) => sum + (severityWeights[item.severity] ?? 0), 0);
+      finalRiskScore = Math.min(100, Math.round((sumWeights / 3) * 100) / 100);
+      const sorted = [...findings].sort((a, b) => (severityWeights[b.severity] ?? 0) - (severityWeights[a.severity] ?? 0));
+      const highestPriority = sorted[0];
+      finalSummary = `Detected ${findings.length} finding(s). Highest priority: ${highestPriority.severity} ${highestPriority.category} issue, ${highestPriority.title}.`;
+    }
+    const posted = await postReviewSummary({ owner, repo, pullNumber: pullRequest.number, installationId, headSha: context.pullRequest.headSha, summary: finalSummary, findings, files: context.files });
+    await updateReview(review?.id, { status: "completed", summary: finalSummary, riskScore: finalRiskScore, postedToGithub: posted, completedAt: new Date() });
+    return { findings: findings.length, riskScore: finalRiskScore, posted };
   } catch (err) {
     let message = err.message || String(err);
     const nonRetryable = isNonRetryableError(err);

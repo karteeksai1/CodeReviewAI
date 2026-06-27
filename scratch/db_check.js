@@ -11,8 +11,23 @@ const pool = new pg.Pool({
 });
 
 async function main() {
-  const users = await pool.query("select id, email from users");
-  console.log(users.rows);
+  const queryText = `
+    SELECT 
+      r.id, 
+      rep.full_name AS repo_name, 
+      pr.number AS pr_number, 
+      r.head_sha AS commit_sha, 
+      r.status, 
+      r.summary, 
+      r.created_at
+    FROM reviews r
+    JOIN pull_requests pr ON pr.id = r.pull_request_id
+    JOIN repositories rep ON rep.id = pr.repository_id
+    ORDER BY r.created_at DESC
+    LIMIT 15
+  `;
+  const reviews = await pool.query(queryText);
+  console.log(reviews.rows);
   await pool.end();
 }
 

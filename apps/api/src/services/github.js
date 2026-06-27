@@ -139,6 +139,33 @@ export async function fetchPullRequestContext({ owner, repo, pullNumber, install
     } catch (err) {
     }
   }
+  const detailedFiles = await Promise.all(
+    files.map(async (file) => {
+      let content = "";
+      if (file.status !== "removed") {
+        try {
+          const contentRes = await octokit.repos.getContent({
+            owner,
+            repo,
+            path: file.filename,
+            ref: pullRequest.head.sha
+          });
+          if (contentRes.data && contentRes.data.content) {
+            content = Buffer.from(contentRes.data.content, "base64").toString("utf8");
+          }
+        } catch (err) {}
+      }
+      return {
+        path: file.filename,
+        status: file.status,
+        additions: file.additions,
+        deletions: file.deletions,
+        changes: file.changes,
+        patch: file.patch ?? "",
+        content
+      };
+    })
+  );
   return {
     repository: { owner, name: repo, fullName: `${owner}/${repo}` },
     pullRequest: {
@@ -155,7 +182,7 @@ export async function fetchPullRequestContext({ owner, repo, pullNumber, install
       mergeableState,
       conflictDetails
     },
-    files: files.map((file) => ({ path: file.filename, status: file.status, additions: file.additions, deletions: file.deletions, changes: file.changes, patch: file.patch ?? "" })),
+    files: detailedFiles,
     diff: String(diffResponse.data ?? "")
   };
 }

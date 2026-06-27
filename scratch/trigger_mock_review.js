@@ -5,6 +5,7 @@ import { fileURLToPath } from "url";
 import crypto from "crypto";
 import { requestAgentReview } from "../apps/api/src/services/agent-bridge.js";
 import { createReview, initDb, insertFindings, query, updateReview, upsertAgentRuns, upsertPullRequest, upsertRepository } from "../apps/api/src/db/index.js";
+import { runDeterministicChecks } from "../apps/api/src/services/deterministic-checks.js";
 
 const rootEnvPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../.env");
 dotenv.config({ path: rootEnvPath });
@@ -103,16 +104,29 @@ async function main() {
   console.log("Agent result received.");
   
   const findings = agentResult.findings ?? [];
+  const deterministicFindings = runDeterministicChecks(files);
+  findings.push(...deterministicFindings);
   console.log("Findings count:", findings.length);
   console.log(JSON.stringify(findings, null, 2));
 
   await insertFindings(review.id, findings);
   await upsertAgentRuns(review.id, agentResult.agent_runs ?? []);
   
+  let finalSummary = agentResult.summary;
+  let finalRiskScore = agentResult.risk_score;
+  if (deterministicFindings.length > 0) {
+    const severityWeights = { critical: 10, high: 7, medium: 4, low: 2, info: 0 };
+    const sumWeights = findings.reduce((sum, item) => sum + (severityWeights[item.severity] ?? 0), 0);
+    finalRiskScore = Math.min(100, Math.round((sumWeights / 3) * 100) / 100);
+    const sorted = [...findings].sort((a, b) => (severityWeights[b.severity] ?? 0) - (severityWeights[a.severity] ?? 0));
+    const highestPriority = sorted[0];
+    finalSummary = `Detected ${findings.length} finding(s). Highest priority: ${highestPriority.severity} ${highestPriority.category} issue, ${highestPriority.title}.`;
+  }
+
   await updateReview(review.id, {
     status: "completed",
-    summary: agentResult.summary,
-    riskScore: agentResult.risk_score,
+    summary: finalSummary,
+    riskScore: finalRiskScore,
     completedAt: new Date(),
     mergeable: false,
     mergeableState: "dirty",
