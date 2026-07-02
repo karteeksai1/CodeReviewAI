@@ -223,17 +223,18 @@ a { color: inherit; }
 
 @keyframes drift {
   0% { transform: translate(0, 0) scale(1); }
-  50% { transform: translate(-2%, 1%) scale(1.04); }
+  50% { transform: translate(-30px, 15px) scale(1.05); }
   100% { transform: translate(0, 0) scale(1); }
 }
 
 .animated-streaks {
-  animation: drift 35s ease-in-out infinite;
+  animation: drift 18s ease-in-out infinite;
   transform-origin: center;
+  transform-box: fill-box;
 }
 
 .hero-visual {
-  flex: 0 0 50%;
+  flex: 1 1 50%;
   width: 50%;
   position: relative;
   z-index: 1;
@@ -304,7 +305,7 @@ a { color: inherit; }
 }
 
 .hero-panel {
-  flex: 0 0 50%;
+  flex: 1 1 50%;
   width: 50%;
   position: relative;
   z-index: 2;
