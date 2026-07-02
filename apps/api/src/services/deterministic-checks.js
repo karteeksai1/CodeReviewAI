@@ -112,10 +112,52 @@ export function runDeterministicChecks(files) {
   return findings;
 }
 
+export function enforceSeverityRubric(finding) {
+  const title = (finding.title || "").toLowerCase();
+  const body = (finding.body || "").toLowerCase();
+  const cat = (finding.category || "").toLowerCase();
+  let severity = (finding.severity || "info").toLowerCase();
+  const isRCE = title.includes("eval") || body.includes("eval") || title.includes("rce") || title.includes("command execution");
+  const isAuthBypass = title.includes("auth bypass") || title.includes("authentication bypass") || body.includes("bypass auth");
+  const isProdSecret = (title.includes("production secret") || title.includes("private key") || body.includes("production secret") || body.includes("private key")) && !title.includes("non-production") && !title.includes("internal");
+  if (isRCE || isAuthBypass || isProdSecret) {
+    severity = "critical";
+  } else {
+    if (severity === "critical") {
+      severity = "high";
+    }
+  }
+  const isSQLi = title.includes("sql injection") || body.includes("sql injection");
+  const isMergeConflict = title.includes("conflict marker") || title.includes("merge conflict") || body.includes("conflict marker") || body.includes("merge conflict");
+  const isCrashMemory = title.includes("crash") || body.includes("crash") || title.includes("memory exhaustion") || body.includes("memory exhaustion") || title.includes("out of memory") || body.includes("out of memory");
+  const isDbHost = title.includes("db_host") || title.includes("database host") || title.includes("hostname") || body.includes("database host") || body.includes("hostname") || body.includes("db_host");
+  const isApiKey = title.includes("api key") || title.includes("apikey") || body.includes("api key") || body.includes("apikey");
+  const isCred = title.includes("credential") || title.includes("password") || title.includes("secret") || title.includes("key") || body.includes("credential") || body.includes("password") || body.includes("secret") || body.includes("key");
+  const belongsToHigh = isSQLi || isMergeConflict || isCrashMemory || isDbHost || isApiKey || isCred;
+  if (belongsToHigh && severity !== "critical") {
+    severity = "high";
+  }
+  const isMedium = cat === "performance" || title.includes("performance") || title.includes("error handling") || body.includes("error handling") || title.includes("at scale") || body.includes("at scale");
+  if (isMedium && severity !== "critical" && severity !== "high") {
+    severity = "medium";
+  }
+  if (cat === "style") {
+    if (severity === "critical" || severity === "high") {
+      severity = "medium";
+    }
+    if (title.includes("naming") || title.includes("name") || body.includes("naming") || body.includes("name")) {
+      severity = "info";
+    }
+  }
+  finding.severity = severity;
+  return finding;
+}
+
 export function deduplicateFindings(findings) {
   const result = [];
   const severityOrder = { critical: 5, high: 4, medium: 3, low: 2, info: 1 };
-  const sorted = [...findings].sort((a, b) => {
+  const normalized = findings.map(f => enforceSeverityRubric({ ...f }));
+  const sorted = [...normalized].sort((a, b) => {
     if ((a.path || "") !== (b.path || "")) {
       return (a.path || "").localeCompare(b.path || "");
     }
@@ -124,14 +166,34 @@ export function deduplicateFindings(findings) {
     if (lineA !== lineB) return lineA - lineB;
     return (severityOrder[b.severity] || 0) - (severityOrder[a.severity] || 0);
   });
-  const stopWords = new Set(["a", "an", "the", "in", "on", "at", "to", "for", "with", "is", "are", "was", "were", "of", "and", "or", "not", "has", "have", "file", "code", "exposed", "exposing", "exposure"]);
   const getCleanWords = (str) => {
+    const stopWords = new Set(["a", "an", "the", "in", "on", "at", "to", "for", "with", "is", "are", "was", "were", "of", "and", "or", "not", "has", "have", "file", "code", "exposed", "exposing", "exposure"]);
     return new Set(
       (str || "")
         .toLowerCase()
         .split(/\W+/)
         .filter(w => w.length > 2 && !stopWords.has(w))
     );
+  };
+  const getCleanWordsFromTitle = (str) => getCleanWords(str);
+  const getIssueClass = (item) => {
+    const title = (item.title || "").toLowerCase();
+    const body = (item.body || "").toLowerCase();
+    const cat = (item.category || "").toLowerCase();
+    if (cat === "security") {
+      const isCred = ["credential", "password", "secret", "token", "key", "private", "hostname", "expose", "hardcode", "data exposure", "data"].some(k => title.includes(k) || body.includes(k));
+      if (isCred) return "security_credential";
+      const isEval = ["eval", "injection", "command execution", "rce", "dynamic code", "remote code"].some(k => title.includes(k) || body.includes(k));
+      if (isEval) return "security_eval";
+      return "security_other";
+    }
+    if (cat === "syntax" || cat === "conflict" || title.includes("syntax") || title.includes("conflict") || title.includes("marker")) {
+      return "syntax_error";
+    }
+    if (cat === "performance") {
+      return "performance_issue";
+    }
+    return "style_readability";
   };
   const clusters = [];
   for (const item of sorted) {
@@ -140,41 +202,26 @@ export function deduplicateFindings(findings) {
       const representative = cluster[0];
       const sameFile = (item.path || "") === (representative.path || "");
       if (!sameFile) continue;
-      let closeLine = false;
-      for (const clusterItem of cluster) {
-        const dist = Math.abs((item.line ?? 0) - (clusterItem.line ?? 0));
-        if (dist <= 3) {
-          closeLine = true;
+      const sameCategory = (item.category || "").toLowerCase() === (representative.category || "").toLowerCase();
+      if (!sameCategory) continue;
+      const itemClass = getIssueClass(item);
+      const repClass = getIssueClass(representative);
+      if (itemClass === repClass) {
+        if (itemClass === "style_readability" || itemClass === "security_other") {
+          const words1 = getCleanWordsFromTitle(item.title);
+          const words2 = getCleanWordsFromTitle(representative.title);
+          const intersection = [...words1].filter(w => words2.has(w));
+          const closeLine = cluster.some(c => Math.abs((item.line ?? 0) - (c.line ?? 0)) <= 3);
+          if (intersection.length >= 1 || closeLine) {
+            cluster.push(item);
+            placed = true;
+            break;
+          }
+        } else {
+          cluster.push(item);
+          placed = true;
           break;
         }
-      }
-      if (!closeLine) continue;
-      const itemTitle = (item.title || "").toLowerCase();
-      const repTitle = (representative.title || "").toLowerCase();
-      const isSecurity = item.category === "security" && representative.category === "security";
-      const isSyntax = item.category === "syntax" && representative.category === "syntax";
-      let similar = false;
-      if (isSecurity) {
-        const secKeywords = ["password", "secret", "credential", "token", "key", "auth", "private", "expose", "hardcode"];
-        const hasSec1 = secKeywords.some(k => itemTitle.includes(k) || (item.body || "").toLowerCase().includes(k));
-        const hasSec2 = secKeywords.some(k => repTitle.includes(k) || (representative.body || "").toLowerCase().includes(k));
-        if (hasSec1 && hasSec2) {
-          similar = true;
-        }
-      } else if (isSyntax) {
-        similar = true;
-      } else {
-        const words1 = getCleanWords(item.title);
-        const words2 = getCleanWords(representative.title);
-        const intersection = [...words1].filter(w => words2.has(w));
-        if (intersection.length >= 1) {
-          similar = true;
-        }
-      }
-      if (similar) {
-        cluster.push(item);
-        placed = true;
-        break;
       }
     }
     if (!placed) {
@@ -197,14 +244,16 @@ export function deduplicateFindings(findings) {
     const minLine = Math.min(...lines);
     const maxLine = Math.max(...lines);
     const merged = { ...best };
-    const isSecurity = cluster.every(c => c.category === "security");
-    if (isSecurity && minLine !== maxLine) {
-      merged.title = `Hardcoded credentials detected in ${merged.path}:${minLine}-${maxLine}`;
-      merged.body = `Hardcoded credentials (including host, username, or password) are committed in code. Move credentials to environment variables or a secrets manager.`;
+    const issueClass = getIssueClass(best);
+    if (minLine !== maxLine) {
       merged.line = minLine;
-    } else {
-      if (minLine !== maxLine) {
-        merged.line = minLine;
+      if (issueClass === "security_credential") {
+        merged.title = `Hardcoded credentials detected in ${merged.path}:${minLine}-${maxLine}`;
+        merged.body = `Hardcoded credentials (including host, username, or password) are committed in code. Move credentials to environment variables or a secrets manager.`;
+      } else if (issueClass === "security_eval") {
+        merged.title = `User-controlled code execution via eval in ${merged.path}:${minLine}-${maxLine}`;
+        merged.body = `Avoid user-controlled dynamic code execution. Eval() allows remote code execution (RCE) vulnerabilities.`;
+      } else {
         merged.title = `${best.title} (lines ${minLine}-${maxLine})`;
       }
     }

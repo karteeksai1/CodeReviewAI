@@ -112,9 +112,9 @@ async def _groq_security_findings(state, context_str):
         "Enumerate every distinct concrete issue in the diff. Do not stop after the highest-severity issue, and do not collapse unrelated issues in the same file into one finding. "
         "Strict Precision Rules: "
         "1. Do NOT emit a finding if your analysis concludes the issue does not apply, is not present, or is not applicable. Only emit findings for issues actually identified in the code. "
-        "2. Do NOT emit hypothetical or generic findings (e.g. 'code is not thread-safe' or 'stores data in memory') unless you have concrete justification grounded in the actual code/diff showing a real, material risk. "
+        "2. Do NOT emit hypothetical, generic, or speculative findings (e.g. 'code is not thread-safe' or 'lacks tests') unless you have concrete justification grounded in the actual code/diff showing a real, material risk. "
         "3. Do NOT double-count issues already flagged or primarily belonging to other categories (like performance or style). "
-        "4. Check whether any changed signature/shape in the diff would break the usage shown in the dependency context. Only emit a finding when there is concrete evidence of an actual mismatch (parameter count/type mismatch, removed property/method still being accessed, etc.) from the retrieved context. Do NOT emit hypothetical warnings about potential caller effects without concrete evidence. Focus strictly on security-relevant aspects."
+        "4. Report only issues directly evidenced by changed or immediately impacted lines in the diff. Do NOT infer or speculate about broader codebase issues, lack of tests, runtime environment, or multi-threading models without explicit evidence in the diff. For example, do not emit findings complaining about lack of test coverage for a class unless the diff explicitly shows test files being deleted or code added without required tests."
     )
     user = (
         f"Repository: {state.get('repository', {}).get('fullName')}\n"
