@@ -11,24 +11,8 @@ const pool = new pg.Pool({
 });
 
 async function main() {
-  const latestRev = await pool.query("select * from reviews order by id desc limit 1");
-  const review = latestRev.rows[0];
-  console.log("Latest Review:", {
-    id: review.id,
-    status: review.status,
-    head_sha: review.head_sha
-  });
-  
-  const findings = await pool.query("select * from findings where review_id = $1", [review.id]);
-  console.log("Canonical findings count:", findings.rows.length);
-
-  const agentRuns = await pool.query("select * from agent_runs where review_id = $1", [review.id]);
-  console.log("Agent runs stored in DB:");
-  console.log(agentRuns.rows);
-  
-  const sumRuns = agentRuns.rows.reduce((sum, run) => sum + (run.finding_count || 0), 0);
-  console.log("Sum of agent runs findings:", sumRuns);
-
+  const result = await pool.query("select id, repository_full_name, status, message, chunks, embedded from indexing_jobs where id = '38'");
+  console.log(result.rows);
   await pool.end();
 }
 

@@ -17,7 +17,7 @@ export const config = {
   databaseUrl: process.env.NEON_DATABASE_URL ?? process.env.DATABASE_URL,
   autoMigrate: process.env.DB_AUTO_MIGRATE !== "false",
   queueConcurrency: Number(process.env.QUEUE_CONCURRENCY ?? 3),
-  agentUrl: process.env.AGENT_URL ?? "http://localhost:8000",
+  agentUrl: process.env.AGENT_URL ?? "http://127.0.0.1:8000",
   github: {
     appId: process.env.GITHUB_APP_ID,
     appName: process.env.GITHUB_APP_NAME,
