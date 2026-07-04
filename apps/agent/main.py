@@ -6,8 +6,14 @@ import httpx
 import structlog
 from dotenv import load_dotenv
 
-env_path = Path(__file__).resolve().parents[2] / ".env"
-load_dotenv(dotenv_path=env_path)
+if os.environ.get("RAILWAY_ENVIRONMENT"):
+    load_dotenv()
+else:
+    try:
+        env_path = Path(__file__).resolve().parents[2] / ".env"
+        load_dotenv(dotenv_path=env_path)
+    except IndexError:
+        load_dotenv()
 
 from fastapi import FastAPI, Request
 from pydantic import BaseModel, Field
