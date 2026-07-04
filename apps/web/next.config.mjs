@@ -1,4 +1,5 @@
 const nextConfig = {
+  output: 'export',
   devIndicators: false
 };
 
