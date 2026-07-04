@@ -11,3 +11,4 @@ venv/
 *.pem
 .DS_Store
 
+apps/agent/repos/
