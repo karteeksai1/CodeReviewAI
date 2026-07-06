@@ -35,10 +35,11 @@ webhookRouter.post("/", express.raw({ type: "*/*", limit: "5mb" }), async (req, 
       res.status(202).json({ accepted: true, queued: false, deliveryId });
       return;
     }
-    if (!payload.installation) {
-      payload.installation = {};
+    const installationId = payload.installation?.id;
+    if (!installationId) {
+      logger.error({ deliveryId, eventName }, "Webhook payload missing installation.id");
+      throw new MissingInstallationIdError();
     }
-    payload.installation.id = payload.installation.id || "repo-webhook-bypass";
     const job = await enqueueReview(eventName, payload);
     res.status(202).json({ accepted: true, queued: true, jobId: job?.id, deliveryId });
   } catch (err) {
