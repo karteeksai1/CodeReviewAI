@@ -221,14 +221,7 @@ a { color: inherit; }
   background: #f4f6f4;
 }
 
-@keyframes drift {
-  0% { transform: translate(0, 0) scale(1); }
-  50% { transform: translate(-30px, 15px) scale(1.05); }
-  100% { transform: translate(0, 0) scale(1); }
-}
-
 .animated-streaks {
-  animation: drift 18s ease-in-out infinite;
   transform-origin: center;
   transform-box: fill-box;
 }
