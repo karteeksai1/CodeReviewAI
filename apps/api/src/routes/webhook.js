@@ -51,7 +51,6 @@ function shouldQueue(eventName, payload) {
   if (eventName === "pull_request") {
     return ["opened", "reopened", "synchronize", "ready_for_review", "converted_to_draft"].includes(payload.action);
   }
-  if (eventName === "push") return Boolean(payload.repository?.full_name && payload.after);
   if (eventName === "pull_request_review") return payload.action === "submitted";
   if (eventName === "issue_comment") {
     return payload.action === "created" && payload.issue && payload.issue.pull_request;
