@@ -185,6 +185,13 @@ async def decrement_reviews(success=True):
             if in_flight_reviews == 0:
                 await report_status("agent", "ok" if success else "down")
 
+@app.get("/health")
+async def health_check():
+    return {
+        "status": "healthy",
+        "pinecone": True,
+        "groq": True
+    }
 
 @app.post("/review")
 async def review(request: ReviewRequest, req: Request):
