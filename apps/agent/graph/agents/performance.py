@@ -100,7 +100,40 @@ async def performance_agent(state):
         context_str += "\n\n=== CROSS-FILE DEPENDENCY REFERENCES ===\n" + "\n\n".join(dep_contexts)
         
     llm_findings = await _groq_performance_findings(state, context_str)
-    return llm_findings + findings
+    
+    combined_findings = llm_findings + findings
+    filtered_findings = []
+    added_lines_text = " ".join(code.lower() for _, _, code in iter_added_lines(state.get("files", [])))
+    
+    for f in combined_findings:
+        title_lower = f.get("title", "").lower()
+        body_lower = f.get("body", "").lower()
+        text_to_check = title_lower + " " + body_lower
+        
+        if "no database queries found" in text_to_check or "no database queries are present" in text_to_check or "no queries found" in text_to_check:
+            continue
+            
+        db_terms = ["database", "query", "queries", "sql", "cache", "caching", "eager loading", "lazy loading", "index", "indexing"]
+        if any(term in text_to_check for term in db_terms):
+            db_kws = ["query", "select", "insert", "update", "delete", "db.", "pool.", "prisma.", "mongoose.", "sequelize.", "knex.", "execute", "sql"]
+            if not any(kw in added_lines_text for kw in db_kws):
+                continue
+                
+        net_terms = ["network", "http", "fetch", "axios", "request"]
+        if any(term in text_to_check for term in net_terms):
+            net_kws = ["fetch", "axios", "http", "request", "client", "socket", "api"]
+            if not any(kw in added_lines_text for kw in net_kws):
+                continue
+                
+        file_terms = ["file system", "file io", "readfile", "writefile", "fs.", "file_"]
+        if any(term in text_to_check for term in file_terms):
+            file_kws = ["fs", "readfile", "writefile", "open", "file"]
+            if not any(kw in added_lines_text for kw in file_kws):
+                continue
+                
+        filtered_findings.append(f)
+        
+    return filtered_findings
 
 
 async def _groq_performance_findings(state, context_str):
@@ -112,7 +145,8 @@ async def _groq_performance_findings(state, context_str):
         "1. Do NOT emit a finding if your analysis concludes the issue does not apply, is not present, or is not applicable (e.g. do not flag 'Avoidable Network Calls' if there are no network calls in the code). Only emit findings for issues actually identified in the code. "
         "2. Do NOT emit hypothetical, generic, or speculative findings (e.g. 'code is not thread-safe' or 'stores data in memory') unless you have concrete justification grounded in the actual code/diff showing a real, material risk. flag thread-safety only if there is evidence of concurrent/multi-threaded usage, and flag memory growth only if the dataset grows unbounded. "
         "3. Do NOT double-count issues already flagged or primarily belonging to other categories (like security or style/maintainability). "
-        "4. Report only performance or concurrency issues directly evidenced by changed or immediately impacted lines in the diff. Do NOT infer issues about the broader codebase, runtime environment, or multi-threading model without explicit evidence in the diff. For example, JavaScript has a single-threaded runtime model; do not flag a plain class/object for concurrency or thread-safety issues without explicit evidence of concurrent workers, threads, SharedArrayBuffer, or concurrent access patterns in the diff itself."
+        "4. Report only performance or concurrency issues directly evidenced by changed or immediately impacted lines in the diff. Do NOT infer issues about the broader codebase, runtime environment, or multi-threading model without explicit evidence in the diff. For example, JavaScript has a single-threaded runtime model; do not flag a plain class/object for concurrency or thread-safety issues without explicit evidence of concurrent workers, threads, SharedArrayBuffer, or concurrent access patterns in the diff itself. "
+        "5. Do not suggest database optimizations, caching strategies, or query patterns unless the diff itself contains actual database query code. The possibility of the code interacting with a database elsewhere is not sufficient grounds for a finding."
     )
     user = (
         f"Repository: {state.get('repository', {}).get('fullName')}\n"
