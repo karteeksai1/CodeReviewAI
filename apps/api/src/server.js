@@ -97,8 +97,8 @@ app.get("/health", (_req, res) => {
   });
 });
 
-app.use(express.json({ limit: "2mb" }));
 app.use("/webhook", webhookRouter);
+app.use(express.json({ limit: "2mb" }));
 
 app.post("/health/status", (req, res) => {
   let { service, status } = req.body ?? {};
