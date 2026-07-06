@@ -1,5 +1,5 @@
 from typing import Annotated, Any, TypedDict
-
+import structlog
 
 def merge_findings(left: list, right: list) -> list:
     combined = (left or []) + (right or [])
