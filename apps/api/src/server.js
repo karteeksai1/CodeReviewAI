@@ -9,6 +9,7 @@ import { reviewsRouter } from "./routes/reviews.js";
 import { webhookRouter } from "./routes/webhook.js";
 import { logger } from "./logger.js";
 import { publicError } from "./errors.js";
+import "./queue/worker.js";
 
 const app = express();
 
@@ -95,8 +96,10 @@ app.get("/health", (_req, res) => {
     groq: serviceRegistry.groq
   });
 });
-app.use("/webhook", webhookRouter);
+
 app.use(express.json({ limit: "2mb" }));
+app.use("/webhook", webhookRouter);
+
 app.post("/health/status", (req, res) => {
   let { service, status } = req.body ?? {};
   if (service === "llm") service = "groq";
