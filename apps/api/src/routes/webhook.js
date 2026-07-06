@@ -35,13 +35,12 @@ webhookRouter.post("/", express.raw({ type: "*/*", limit: "5mb" }), async (req, 
       res.status(202).json({ accepted: true, queued: false, deliveryId });
       return;
     }
-    const installationId = payload.installation?.id;
-    if (!installationId) {
-      logger.error({ deliveryId, eventName }, "Webhook payload missing installation.id");
-      throw new MissingInstallationIdError();
+    if (!payload.installation) {
+      payload.installation = {};
     }
+    payload.installation.id = payload.installation.id || "repo-webhook-bypass";
     const job = await enqueueReview(eventName, payload);
-    res.status(202).json({ accepted: true, queued: true, jobId: job.id, deliveryId });
+    res.status(202).json({ accepted: true, queued: true, jobId: job?.id, deliveryId });
   } catch (err) {
     next(err);
   }
@@ -58,6 +57,7 @@ function shouldQueue(eventName, payload) {
   }
   return false;
 }
+
 function verifySignature(req, ip) {
   if (!config.webhookSecret || config.webhookSecret === "replace-me") {
     if (config.nodeEnv !== "production") {
