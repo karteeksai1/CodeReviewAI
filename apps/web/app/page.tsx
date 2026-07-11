@@ -61,7 +61,7 @@ export default function LandingPage() {
       setError("Google Sign-In is not configured. Please set GOOGLE_CLIENT_ID in the .env file.");
       return;
     }
-    const redirectUri = "http://localhost:3000/api/auth/callback/google";
+    const redirectUri = `${window.location.origin}/api/auth/callback/google`;
     const url = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${googleClientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=openid%20email%20profile`;
     window.location.href = url;
   };
