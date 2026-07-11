@@ -13,7 +13,20 @@ import "./queue/worker.js";
 
 const app = express();
 
-app.use(cors());
+const allowedOrigins = [
+  "http://localhost:3000",
+  "https://code-review-ai-web-sandy.vercel.app"
+];
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
+  credentials: true
+}));
 const serviceRegistry = {
   postgres: "unknown",
   redis: "unknown",

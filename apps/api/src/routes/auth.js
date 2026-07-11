@@ -89,6 +89,16 @@ authRouter.get("/config", (req, res) => {
   });
 });
 
+authRouter.get("/google", (req, res) => {
+  if (!config.googleClientId) {
+    res.status(500).json({ error: "Google Client ID is not configured" });
+    return;
+  }
+  const callbackUrl = process.env.GOOGLE_CALLBACK_URL || "http://localhost:3000/api/auth/callback/google";
+  const url = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${config.googleClientId}&redirect_uri=${encodeURIComponent(callbackUrl)}&response_type=code&scope=openid%20email%20profile`;
+  res.redirect(url);
+});
+
 authRouter.post("/google", async (req, res, next) => {
   try {
     const { token, code } = req.body ?? {};
@@ -106,7 +116,7 @@ authRouter.post("/google", async (req, res, next) => {
           code,
           client_id: config.googleClientId,
           client_secret: process.env.GOOGLE_CLIENT_SECRET || "",
-          redirect_uri: "http://localhost:3000/api/auth/callback/google",
+          redirect_uri: process.env.GOOGLE_CALLBACK_URL || "http://localhost:3000/api/auth/callback/google",
           grant_type: "authorization_code"
         })
       });
