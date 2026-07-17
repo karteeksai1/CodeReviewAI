@@ -1,3 +1,6 @@
+// It coordinates GitHub, PostgreSQL, Redis, the LLM, deterministic analyzers, 
+// and BullMQ retries to turn an incoming pull request into a persisted review with 
+// AI-generated feedback posted back to GitHub.
 import { Worker } from "bullmq";
 import crypto from "crypto";
 import { config } from "../config.js";

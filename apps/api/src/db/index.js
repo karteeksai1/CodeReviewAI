@@ -1,3 +1,7 @@
+//used to creating tables and defining relations using postgres(Neon)
+// Database Schema Initialization & Data Access Layer (DAL) for PostgreSQL (Neon)
+// Handles automated relational migrations, user authentication state, repository metadata, 
+// and historical pull request review/finding logs. (Vector storage handles separately via Pinecone).
 import bcrypt from "bcryptjs";
 import pg from "pg";
 import { config } from "../config.js";

@@ -1,3 +1,4 @@
+//intialising bull MQ for ingesting new webhook calls
 import { Queue, QueueEvents } from "bullmq";
 import IORedis from "ioredis";
 import { config } from "../config.js";

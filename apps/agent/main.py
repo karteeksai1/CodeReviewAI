@@ -5,22 +5,14 @@ from pathlib import Path
 import httpx
 import structlog
 from dotenv import load_dotenv
-
-if os.environ.get("RAILWAY_ENVIRONMENT"):
-    load_dotenv()
-else:
-    try:
-        env_path = Path(__file__).resolve().parents[2] / ".env"
-        load_dotenv(dotenv_path=env_path)
-    except IndexError:
-        load_dotenv()
-
 from fastapi import FastAPI, Request
 from pydantic import BaseModel, Field
 
 from graph.supervisor import run_review
 from rag import index_repository, get_pinecone
 from llm.groq import request_id_var, token_usage_var
+
+load_dotenv()
 
 structlog.configure(
     processors=[
@@ -185,13 +177,6 @@ async def decrement_reviews(success=True):
             if in_flight_reviews == 0:
                 await report_status("agent", "ok" if success else "down")
 
-@app.get("/health")
-async def health_check():
-    return {
-        "status": "healthy",
-        "pinecone": True,
-        "groq": True
-    }
 
 @app.post("/review")
 async def review(request: ReviewRequest, req: Request):
