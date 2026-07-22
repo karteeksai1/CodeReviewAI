@@ -5,6 +5,11 @@ from graph.agents.common import SEVERITY_WEIGHT
 def aggregate_findings(state):
     deduped = {}
     for item in state.get("findings", []):
+        text_to_check = (item.get("title", "") + " " + item.get("body", "")).lower()
+        if "duplicate code" in text_to_check or "code duplication" in text_to_check:
+            exts = set(re.findall(r"\.([a-zA-Z0-9]+)\b", text_to_check))
+            if len(exts) >= 2:
+                continue
         key = (item.get("category"), item.get("severity"), item.get("path"), item.get("line"), item.get("title"))
         if key not in deduped or item.get("confidence", 0) > deduped[key].get("confidence", 0):
             deduped[key] = item

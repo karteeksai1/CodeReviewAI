@@ -131,6 +131,11 @@ async def performance_agent(state):
             if not any(kw in added_lines_text for kw in file_kws):
                 continue
                 
+        if "unbounded work" in text_to_check or "unbounded loop" in text_to_check or "unbounded iteration" in text_to_check:
+            ext_kws = ["db", "fetch", "query", "select", "readfile", "stream", "api", "axios", "http", "cursor", "find", "csv"]
+            if not any(kw in added_lines_text for kw in ext_kws):
+                continue
+                
         filtered_findings.append(f)
         
     return filtered_findings
@@ -146,7 +151,8 @@ async def _groq_performance_findings(state, context_str):
         "2. Do NOT emit hypothetical, generic, or speculative findings (e.g. 'code is not thread-safe' or 'stores data in memory') unless you have concrete justification grounded in the actual code/diff showing a real, material risk. flag thread-safety only if there is evidence of concurrent/multi-threaded usage, and flag memory growth only if the dataset grows unbounded. "
         "3. Do NOT double-count issues already flagged or primarily belonging to other categories (like security or style/maintainability). "
         "4. Report only performance or concurrency issues directly evidenced by changed or immediately impacted lines in the diff. Do NOT infer issues about the broader codebase, runtime environment, or multi-threading model without explicit evidence in the diff. For example, JavaScript has a single-threaded runtime model; do not flag a plain class/object for concurrency or thread-safety issues without explicit evidence of concurrent workers, threads, SharedArrayBuffer, or concurrent access patterns in the diff itself. "
-        "5. Do not suggest database optimizations, caching strategies, or query patterns unless the diff itself contains actual database query code. The possibility of the code interacting with a database elsewhere is not sufficient grounds for a finding."
+        "5. Do not suggest database optimizations, caching strategies, or query patterns unless the diff itself contains actual database query code. The possibility of the code interacting with a database elsewhere is not sufficient grounds for a finding. "
+        "6. Do NOT flag standard, local, or memory-bound loops (such as iterating over a local array, list, or parameter array like 'for item in numbers' or 'for (let i = 0; i < items.length; i++)') as 'Unbounded Work' or performance issues. Iterating over a local collection in O(n) is expected and standard. Only report potential unbounded work when the collection is fetched directly from an external/untrusted source (such as unpaginated database queries, large streaming files/CSVs, or external API responses) without batching, pagination, or limits, or when the loop is an infinite loop ('while True', 'while (queue.length)') without clear termination/break conditions."
     )
     user = (
         f"Repository: {state.get('repository', {}).get('fullName')}\n"

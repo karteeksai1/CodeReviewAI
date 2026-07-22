@@ -59,7 +59,28 @@ async def style_agent(state):
             
     context_str = "\n".join(set(contexts))
     llm_findings = await _groq_style_findings(state, context_str)
-    return llm_findings + findings
+    
+    combined_findings = llm_findings + findings
+    filtered_findings = []
+    for f in combined_findings:
+        title_lower = f.get("title", "").lower()
+        body_lower = f.get("body", "").lower()
+        text_to_check = title_lower + " " + body_lower
+        
+        if "magic number" in text_to_check:
+            if re.search(r"\b(magic number[s]?\s*(?:of|is|are|:)?\s*['\"]?(?:0|1|-1|2|100|1000)['\"]?)\b", text_to_check) or \
+               re.search(r"\b(numbers?\s+2\s+and\s+1|number\s+2|number\s+1|number\s+0)\b", text_to_check):
+                continue
+            if not re.search(r"\b\d{2,}\b", text_to_check) and any(f" {num} " in f" {text_to_check} " for num in ["0", "1", "-1", "2"]):
+                continue
+
+        if "duplicate code" in text_to_check or "code duplication" in text_to_check:
+            exts = set(re.findall(r"\.([a-zA-Z0-9]+)\b", text_to_check))
+            if len(exts) >= 2:
+                continue
+
+        filtered_findings.append(f)
+    return filtered_findings
 
 
 async def _groq_style_findings(state, context_str):
@@ -72,7 +93,9 @@ async def _groq_style_findings(state, context_str):
         "1. Do NOT emit a finding if your analysis concludes the issue does not apply, is not present, or is not applicable. Only emit findings for issues actually identified in the code. "
         "2. Do NOT emit hypothetical, generic, or speculative findings (e.g. 'lacks tests' or 'could be structured differently') unless you have concrete justification grounded in the actual code/diff showing a real, material risk. Do NOT warn about lack of tests/test coverage unless the diff explicitly shows test files being deleted or code added without required tests. "
         "3. Do NOT double-count issues already flagged or primarily belonging to other categories (like performance or security). "
-        "4. Do NOT emit naming or readability findings unless there is a concrete, demonstrable problem (e.g. the variable name is misleading relative to its actual content, violates a clear codebase convention, or is genuinely ambiguous and confusing in context). Common idiomatic names like 'config', 'data', 'total', 'results', 'manager', 'secretKey' are perfectly valid and must NOT be flagged. 'Could be more descriptive' or 'a more specific name is preferred' is not sufficient grounds for a finding. Genuinely ambiguous names like 'temp' or 'foo' are valid to flag. Do NOT flag standard patterns (such as exporting a config object vs function) unless it explicitly breaks existing code or violates a strict convention in the file/project."
+        "4. Do NOT emit naming or readability findings unless there is a concrete, demonstrable problem (e.g. the variable name is misleading relative to its actual content, violates a clear codebase convention, or is genuinely ambiguous and confusing in context). Common idiomatic names like 'config', 'data', 'total', 'results', 'manager', 'secretKey' are perfectly valid and must NOT be flagged. 'Could be more descriptive' or 'a more specific name is preferred' is not sufficient grounds for a finding. Genuinely ambiguous names like 'temp' or 'foo' are valid to flag. Do NOT flag standard patterns (such as exporting a config object vs function) unless it explicitly breaks existing code or violates a strict convention in the file/project. "
+        "5. Do NOT flag 'Duplicate code' or 'Code duplication' between files of DIFFERENT programming languages or file extensions (e.g. comparing a .js file with a .py file). Implementations in different languages are distinct and intentionally similar; never flag cross-language duplication. "
+        "6. Do NOT flag standard numeric literals 0, 1, -1, 2, 100, 1000, true, false, null, or undefined as 'magic numbers'. Only flag non-obvious, arbitrary numeric constants (such as hardcoded timeouts like 4372, arbitrary threshold limits like < 13, or unexplained retry counts) where the intent is unclear."
     )
     user = (
         f"Repository: {state.get('repository', {}).get('fullName')}\n"
