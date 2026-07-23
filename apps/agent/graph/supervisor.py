@@ -1,10 +1,21 @@
 import asyncio
+import importlib
 import time
 from datetime import datetime, timezone
 from time import perf_counter
 from typing import Any
+import logging
 
-import structlog
+structlog = None
+try:
+    structlog = importlib.import_module("structlog")
+except ImportError:
+    pass
+
+if structlog is not None:
+    logger = structlog.get_logger()
+else:
+    logger = logging.getLogger(__name__)
 
 from graph.agents.performance import performance_agent
 from graph.agents.security import security_agent
@@ -15,11 +26,12 @@ from graph.state import GraphState
 from llm.groq import groq_json, request_id_var, token_usage_var
 
 try:
-    from langgraph.graph import END, START, StateGraph
+    langgraph_graph = importlib.import_module("langgraph.graph")
+    END = langgraph_graph.END
+    START = langgraph_graph.START
+    StateGraph = langgraph_graph.StateGraph
 except Exception:
     END = START = StateGraph = None
-
-logger = structlog.get_logger()
 
 
 async def supervisor_node(state: GraphState) -> GraphState:
