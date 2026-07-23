@@ -1,7 +1,12 @@
 {
   "python.defaultInterpreterPath": "${workspaceFolder}/apps/agent/.venv/bin/python",
   "python.analysis.extraPaths": [
-    "${workspaceFolder}/apps/agent"
+    "${workspaceFolder}/apps/agent",
+    "${workspaceFolder}/apps/agent/.venv/lib/python3.13/site-packages"
+  ],
+  "python.autoComplete.extraPaths": [
+    "${workspaceFolder}/apps/agent",
+    "${workspaceFolder}/apps/agent/.venv/lib/python3.13/site-packages"
   ],
   "python-envs.defaultEnvManager": "ms-python.python:system"
 }
