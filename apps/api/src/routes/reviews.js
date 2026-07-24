@@ -16,6 +16,7 @@ import {
 import { requireJwt } from "../middleware/auth.js";
 import { reviewQueue } from "../queue/index.js";
 import { getInstallationOctokit, getChangedLineRanges } from "../services/github.js";
+import { ensureAgentReady } from "../services/agent-warmup.js";
 
 export const reviewsRouter = express.Router();
 
@@ -157,6 +158,9 @@ reviewsRouter.post("/indexing", requireJwt, rateLimiter({ windowMs: 60 * 1000, m
     const job = await createIndexingJob(repository, req.user.sub);
     (async () => {
       try {
+        await ensureAgentReady(async (status) => {
+          await updateIndexingJob(job.id, { status });
+        });
         await updateIndexingJob(job.id, { status: "indexing", message: "Cloning and embedding repository" });
         const response = await fetch(`${config.agentUrl.replace(/\/$/, "")}/index`, {
           method: "POST",

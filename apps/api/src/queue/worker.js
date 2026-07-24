@@ -91,7 +91,9 @@ const worker = new Worker(REVIEW_QUEUE_NAME, async (job) => {
       mergeableState: context.pullRequest.mergeableState,
       conflictDetails: context.pullRequest.conflictDetails
     });
-    const agentResult = await requestAgentReview(context, requestId);
+    const agentResult = await requestAgentReview(context, requestId, async (status) => {
+      await updateReview(review?.id, { status });
+    });
     const rawFindings = agentResult.findings ?? [];
     const deterministicFindings = runDeterministicChecks(context.files);
     rawFindings.push(...deterministicFindings);

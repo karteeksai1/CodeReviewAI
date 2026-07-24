@@ -1,6 +1,8 @@
 import { config } from "../config.js";
+import { ensureAgentReady } from "./agent-warmup.js";
 
-export async function requestAgentReview(context, requestId) {
+export async function requestAgentReview(context, requestId, onProgress) {
+  await ensureAgentReady(onProgress);
   const response = await fetch(`${config.agentUrl.replace(/\/$/, "")}/review`, {
     method: "POST",
     headers: {

@@ -9,7 +9,9 @@ import { config } from "../config.js";
 export const authRouter = express.Router();
 
 function triggerWarmup() {
-  fetch(`${config.agentUrl.replace(/\/$/, "")}/warmup`, { method: "POST" }).catch(() => {});
+  if (config.agentUrl) {
+    fetch(`${config.agentUrl.replace(/\/$/, "")}/health`).catch(() => {});
+  }
 }
 
 authRouter.post("/login", async (req, res, next) => {
