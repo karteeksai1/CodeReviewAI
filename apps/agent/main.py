@@ -1,5 +1,7 @@
-import os
 import time
+print(f"Agent startup initiated at timestamp: {time.time()}", flush=True)
+
+import os
 import asyncio
 from pathlib import Path
 import httpx
@@ -8,8 +10,6 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from pydantic import BaseModel, Field
 
-from graph.supervisor import run_review
-from rag import index_repository, get_pinecone
 from llm.groq import request_id_var, token_usage_var
 
 load_dotenv()
@@ -67,36 +67,11 @@ class IndexRequest(BaseModel):
 
 @app.get("/health")
 async def health():
-    pinecone_ok = False
-    try:
-        pc_index = os.getenv("PINECONE_INDEX")
-        client = get_pinecone()
-        if client and pc_index:
-            client.Index(pc_index).describe_index_stats()
-            pinecone_ok = True
-    except Exception:
-        pass
-
-    groq_ok = False
-    try:
-        api_key = os.getenv("GROQ_API_KEY")
-        if api_key:
-            async with httpx.AsyncClient() as client:
-                res = await client.get(
-                    "https://api.groq.com/openai/v1/models",
-                    headers={"authorization": f"Bearer {api_key}"},
-                    timeout=5.0
-                )
-                if res.status_code == 200:
-                    groq_ok = True
-    except Exception:
-        pass
-
     return {
         "ok": True,
         "service": "agent",
-        "pinecone": pinecone_ok,
-        "groq": groq_ok
+        "pinecone": bool(os.getenv("PINECONE_API_KEY") and os.getenv("PINECONE_INDEX")),
+        "groq": bool(os.getenv("GROQ_API_KEY"))
     }
 
 
@@ -187,6 +162,7 @@ async def review(request: ReviewRequest, req: Request):
     await increment_reviews()
     success = False
     try:
+        from graph.supervisor import run_review
         result = await run_review(request.model_dump())
         latency = int((time.perf_counter() - start_time) * 1000)
         logger.info(
@@ -221,6 +197,7 @@ async def index(request: IndexRequest, req: Request):
     await increment_indexing()
     success = False
     try:
+        from rag import index_repository
         result = await index_repository(request.repo_path, request.namespace)
         latency = int((time.perf_counter() - start_time) * 1000)
         logger.info(
@@ -242,3 +219,8 @@ async def index(request: IndexRequest, req: Request):
         raise e
     finally:
         await decrement_indexing(success)
+
+
+@app.on_event("startup")
+async def startup_event():
+    print(f"Agent app is ready to serve at timestamp: {time.time()}", flush=True)

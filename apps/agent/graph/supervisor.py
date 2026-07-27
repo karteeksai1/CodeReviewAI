@@ -6,20 +6,12 @@ from typing import Any
 
 import structlog
 
-from graph.agents.performance import performance_agent
-from graph.agents.security import security_agent
-from graph.agents.style import style_agent
-from graph.nodes.aggregator import aggregate_findings
-from graph.nodes.github_poster import prepare_github_post
 from graph.state import GraphState
 from llm.groq import groq_json, request_id_var, token_usage_var
 
-try:
-    from langgraph.graph import END, START, StateGraph
-except Exception:
-    END = START = StateGraph = None
-
 logger = structlog.get_logger()
+
+GRAPH = None
 
 
 async def supervisor_node(state: GraphState) -> GraphState:
@@ -57,6 +49,7 @@ async def security_node(state: GraphState) -> GraphState:
     tokens_before = token_usage_var.get()
     findings = []
     if "security" in state.get("agent_plan", []):
+        from graph.agents.security import security_agent
         findings = await security_agent(state)
     duration = int((time.perf_counter() - start_time) * 1000)
     tokens_used = token_usage_var.get() - tokens_before
@@ -77,6 +70,7 @@ async def performance_node(state: GraphState) -> GraphState:
     tokens_before = token_usage_var.get()
     findings = []
     if "performance" in state.get("agent_plan", []):
+        from graph.agents.performance import performance_agent
         findings = await performance_agent(state)
     duration = int((time.perf_counter() - start_time) * 1000)
     tokens_used = token_usage_var.get() - tokens_before
@@ -97,6 +91,7 @@ async def style_node(state: GraphState) -> GraphState:
     tokens_before = token_usage_var.get()
     findings = []
     if "style" in state.get("agent_plan", []):
+        from graph.agents.style import style_agent
         findings = await style_agent(state)
     duration = int((time.perf_counter() - start_time) * 1000)
     tokens_used = token_usage_var.get() - tokens_before
@@ -115,6 +110,7 @@ async def aggregator_node(state: GraphState) -> GraphState:
     req_id = request_id_var.get()
     start_time = time.perf_counter()
     tokens_before = token_usage_var.get()
+    from graph.nodes.aggregator import aggregate_findings
     result = aggregate_findings(state)
     duration = int((time.perf_counter() - start_time) * 1000)
     tokens_used = token_usage_var.get() - tokens_before
@@ -132,6 +128,7 @@ async def github_poster_node(state: GraphState) -> GraphState:
     req_id = request_id_var.get()
     start_time = time.perf_counter()
     tokens_before = token_usage_var.get()
+    from graph.nodes.github_poster import prepare_github_post
     result = await prepare_github_post(state)
     duration = int((time.perf_counter() - start_time) * 1000)
     tokens_used = token_usage_var.get() - tokens_before
@@ -145,8 +142,13 @@ async def github_poster_node(state: GraphState) -> GraphState:
     return result
 
 
-def build_graph():
-    if StateGraph is None:
+def get_graph():
+    global GRAPH
+    if GRAPH is not None:
+        return GRAPH
+    try:
+        from langgraph.graph import END, START, StateGraph
+    except Exception:
         return None
     workflow = StateGraph(GraphState)
     workflow.add_node("supervisor", supervisor_node)
@@ -162,10 +164,8 @@ def build_graph():
     workflow.add_edge(["security", "performance", "style"], "aggregator")
     workflow.add_edge("aggregator", "github_poster")
     workflow.add_edge("github_poster", END)
-    return workflow.compile()
-
-
-GRAPH = build_graph()
+    GRAPH = workflow.compile()
+    return GRAPH
 
 
 async def run_review(payload: dict[str, Any]) -> dict[str, Any]:
@@ -178,9 +178,15 @@ async def run_review(payload: dict[str, Any]) -> dict[str, Any]:
         "diff": payload.get("diff", ""),
         "findings": [],
     }
-    if GRAPH is not None:
-        final_state = await GRAPH.ainvoke(state)
+    graph = get_graph()
+    if graph is not None:
+        final_state = await graph.ainvoke(state)
     else:
+        from graph.agents.security import security_agent
+        from graph.agents.performance import performance_agent
+        from graph.agents.style import style_agent
+        from graph.nodes.aggregator import aggregate_findings
+        from graph.nodes.github_poster import prepare_github_post
         state.update(await supervisor_node(state))
         security, performance, style = await asyncio.gather(security_agent(state), performance_agent(state), style_agent(state))
         state["findings"] = security + performance + style
