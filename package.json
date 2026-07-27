@@ -1,6 +1,7 @@
 {
   "name": "codereviewai",
   "private": true,
+  "type": "module",
   "workspaces": ["apps/api", "apps/web"],
   "scripts": {
     "dev:api": "npm --workspace apps/api run dev",

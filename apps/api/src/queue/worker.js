@@ -29,6 +29,7 @@ function isNonRetryableError(err) {
 }
 
 const worker = new Worker(REVIEW_QUEUE_NAME, async (job) => {
+  logger.info({ jobId: job.id }, "job received");
   const { eventName, payload } = job.data;
   if (eventName !== "pull_request") return { skipped: true };
 
@@ -158,7 +159,13 @@ const worker = new Worker(REVIEW_QUEUE_NAME, async (job) => {
     }
     throw err;
   }
-}, { connection, concurrency: config.queueConcurrency });
+}, {
+  connection,
+  concurrency: config.queueConcurrency,
+  stalledInterval: 300000,
+  maxStalledCount: 3,
+  lockDuration: 300000
+});
 
 worker.on("completed", (job, result) => logger.info({ jobId: job.id, result }, "review job completed"));
 worker.on("failed", (job, err) => logger.error({ jobId: job?.id, err }, "review job failed"));

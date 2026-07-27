@@ -2,9 +2,13 @@
 import { Queue, QueueEvents } from "bullmq";
 import IORedis from "ioredis";
 import { config } from "../config.js";
+import { logger } from "../logger.js";
 
 export const REVIEW_QUEUE_NAME = "pr_review";
+
+logger.info("connecting to Redis...");
 export const connection = new IORedis(config.redisUrl, { maxRetriesPerRequest: null });
+logger.info("connected to Redis");
 
 export const reviewQueue = new Queue(REVIEW_QUEUE_NAME, {
   connection,
