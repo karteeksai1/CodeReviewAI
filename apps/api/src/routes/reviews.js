@@ -17,6 +17,7 @@ import { requireJwt } from "../middleware/auth.js";
 import { reviewQueue } from "../queue/index.js";
 import { getInstallationOctokit, getChangedLineRanges } from "../services/github.js";
 import { ensureAgentReady } from "../services/agent-warmup.js";
+import { logger } from "../logger.js";
 
 export const reviewsRouter = express.Router();
 
@@ -158,10 +159,12 @@ reviewsRouter.post("/indexing", requireJwt, rateLimiter({ windowMs: 60 * 1000, m
     const job = await createIndexingJob(repository, req.user.sub);
     (async () => {
       try {
+        logger.info({ jobId: job.id, repository }, "indexing job initiated");
         await ensureAgentReady(async (status) => {
           await updateIndexingJob(job.id, { status });
         });
         await updateIndexingJob(job.id, { status: "indexing", message: "Cloning and embedding repository" });
+        logger.info({ jobId: job.id, repository }, "sending indexing request to agent");
         const response = await fetch(`${config.agentUrl.replace(/\/$/, "")}/index`, {
           method: "POST",
           headers: {
@@ -182,7 +185,9 @@ reviewsRouter.post("/indexing", requireJwt, rateLimiter({ windowMs: 60 * 1000, m
           embedded: result.chunks,
           message: "Codebase indexed successfully"
         });
+        logger.info({ jobId: job.id, repository, chunks: result.chunks }, "indexing job completed successfully");
       } catch (err) {
+        logger.error({ jobId: job.id, repository, err }, "indexing job failed");
         await updateIndexingJob(job.id, {
           status: "failed",
           message: err.message
