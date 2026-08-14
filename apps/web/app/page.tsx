@@ -22,6 +22,7 @@ export default function LandingPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [googleClientId, setGoogleClientId] = useState<string | null>(null);
+  const [configFailed, setConfigFailed] = useState(false);
 
   useEffect(() => {
     if (!loading && user) {
@@ -30,11 +31,24 @@ export default function LandingPage() {
   }, [user, loading, router]);
 
   useEffect(() => {
-    fetchAuthConfig()
-      .then((cfg) => {
-        setGoogleClientId(cfg.googleClientId);
-      })
-      .catch(() => {});
+    let cancelled = false;
+    async function loadConfig(attempt = 1) {
+      try {
+        const cfg = await fetchAuthConfig();
+        if (!cancelled) setGoogleClientId(cfg.googleClientId);
+      } catch {
+        if (cancelled) return;
+        if (attempt < 5) {
+          setTimeout(() => loadConfig(attempt + 1), attempt * 3000);
+        } else {
+          setConfigFailed(true);
+        }
+      }
+    }
+    loadConfig();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const handleAuthSubmit = async (e: React.FormEvent) => {
@@ -57,8 +71,12 @@ export default function LandingPage() {
   };
 
   const handleGoogleLogin = () => {
+    if (googleClientId === null && !configFailed) {
+      setError("Still connecting to the server — try again in a few seconds.");
+      return;
+    }
     if (!googleClientId) {
-      setError("Google Sign-In is not configured. Please set GOOGLE_CLIENT_ID in the .env file.");
+      setError("Google Sign-In is currently unavailable. Please try again shortly.");
       return;
     }
     const redirectUri = `${window.location.origin}/api/auth/callback/google`;
