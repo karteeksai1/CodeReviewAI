@@ -4,52 +4,22 @@ import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import { GitPullRequest, ArrowRight, ShieldCheck } from "lucide-react";
 import { useAuth } from "../lib/auth";
-import { fetchAuthConfig } from "../lib/api";
-
-declare global {
-  interface Window {
-    google: any;
-  }
-}
 
 export default function LandingPage() {
   const router = useRouter();
-  const { user, login, signup, loginWithGoogle, loading } = useAuth();
+  const { user, login, signup, loading } = useAuth();
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [googleClientId, setGoogleClientId] = useState<string | null>(null);
-  const [configFailed, setConfigFailed] = useState(false);
 
   useEffect(() => {
     if (!loading && user) {
       router.replace("/dashboard");
     }
   }, [user, loading, router]);
-
-  useEffect(() => {
-    let cancelled = false;
-    async function loadConfig(attempt = 1) {
-      try {
-        const cfg = await fetchAuthConfig();
-        if (!cancelled) setGoogleClientId(cfg.googleClientId);
-      } catch {
-        if (cancelled) return;
-        if (attempt < 5) {
-          setTimeout(() => loadConfig(attempt + 1), attempt * 3000);
-        } else {
-          setConfigFailed(true);
-        }
-      }
-    }
-    loadConfig();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -68,20 +38,6 @@ export default function LandingPage() {
     } finally {
       setSubmitting(false);
     }
-  };
-
-  const handleGoogleLogin = () => {
-    if (googleClientId === null && !configFailed) {
-      setError("Still connecting to the server — try again in a few seconds.");
-      return;
-    }
-    if (!googleClientId) {
-      setError("Google Sign-In is currently unavailable. Please try again shortly.");
-      return;
-    }
-    const redirectUri = `${window.location.origin}/api/auth/callback/google`;
-    const url = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${googleClientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=openid%20email%20profile`;
-    window.location.href = url;
   };
 
   const handleDashboardRedirect = () => {
@@ -226,26 +182,6 @@ export default function LandingPage() {
                 {isSignUp ? "Sign In" : "Sign Up"}
               </button>
             </div>
-
-            <div className="panel-divider">
-              <span>or</span>
-            </div>
-
-            <button
-              type="button"
-              className="google-auth-btn"
-              onClick={handleGoogleLogin}
-              disabled={submitting}
-            >
-              <svg className="google-icon" viewBox="0 0 24 24" width="18" height="18" xmlns="http://www.w3.org/2000/svg">
-                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
-                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.56-2.77c-.98.66-2.23 1.06-3.72 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
-                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FBBC05" />
-                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" fill="#EA4335" />
-              </svg>
-              Continue with Google
-            </button>
-
 
             <div className="hero-footer-hint">
               <a href="#how-it-works" className="scroll-hint-link">See how it works ↓</a>

@@ -140,7 +140,7 @@ Postgres (findings, reviews, agent runs stored per commit SHA)
 | Vector store | Pinecone (hybrid BM25 + dense, per-repo namespaces) |
 | Queue | BullMQ + Redis |
 | Database | Neon Postgres |
-| Auth | Google OAuth + GitHub App |
+| Auth | Email/Password + GitHub App |
 | Deployment | Vercel (frontend), Railway/Render (backend services) |
 
 ---

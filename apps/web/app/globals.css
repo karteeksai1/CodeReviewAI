@@ -493,35 +493,6 @@ a { color: inherit; }
   text-decoration: underline;
 }
 
-.google-auth-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  background: #ffffff;
-  border: 1px solid var(--line);
-  color: #1b4332;
-  padding: 14px 24px;
-  font-weight: 600;
-  font-size: 15px;
-  border-radius: 0;
-  cursor: pointer;
-  transition: background 0.2s ease;
-  width: 100%;
-}
-
-.google-auth-btn:hover {
-  background: #f4f6f4;
-}
-
-.google-auth-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.google-icon {
-  flex-shrink: 0;
-}
 
 .hero-footer-hint {
   margin-top: 40px;

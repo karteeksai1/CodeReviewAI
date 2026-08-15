@@ -1,4 +1,3 @@
-//handles googleauth and local signup and login
 import bcrypt from "bcryptjs";
 import express from "express";
 import crypto from "crypto";
@@ -86,106 +85,7 @@ authRouter.post("/signup", async (req, res, next) => {
   }
 });
 
-authRouter.get("/config", (req, res) => {
-  res.json({
-    googleClientId: config.googleClientId ?? null
-  });
-});
 
-authRouter.get("/google", (req, res) => {
-  if (!config.googleClientId) {
-    res.status(500).json({ error: "Google Client ID is not configured" });
-    return;
-  }
-  const callbackUrl = process.env.GOOGLE_CALLBACK_URL || "http://localhost:3000/api/auth/callback/google";
-  const url = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${config.googleClientId}&redirect_uri=${encodeURIComponent(callbackUrl)}&response_type=code&scope=openid%20email%20profile`;
-  res.redirect(url);
-});
-
-authRouter.post("/google", async (req, res, next) => {
-  try {
-    const { token, code } = req.body ?? {};
-    if (!token && !code) {
-      res.status(400).json({ error: "Google ID token (token) or authorization code (code) is required" });
-      return;
-    }
-
-    let idToken = token;
-    if (code) {
-      const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
-        method: "POST",
-        headers: { "content-type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({
-          code,
-          client_id: config.googleClientId,
-          client_secret: process.env.GOOGLE_CLIENT_SECRET || "",
-          redirect_uri: process.env.GOOGLE_CALLBACK_URL || "http://localhost:3000/api/auth/callback/google",
-          grant_type: "authorization_code"
-        })
-      });
-      if (!tokenResponse.ok) {
-        const errorText = await tokenResponse.text();
-        res.status(401).json({ error: "Failed to exchange authorization code: " + errorText });
-        return;
-      }
-      const tokenData = await tokenResponse.json();
-      idToken = tokenData.id_token;
-    }
-
-    const response = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`);
-    if (!response.ok) {
-      res.status(401).json({ error: "Invalid Google ID token" });
-      return;
-    }
-
-    const payload = await response.json();
-    const now = Math.floor(Date.now() / 1000);
-    if (payload.exp && Number(payload.exp) < now) {
-      res.status(401).json({ error: "Google ID token has expired" });
-      return;
-    }
-
-    const validIssuer = ["accounts.google.com", "https://accounts.google.com"].includes(payload.iss);
-    if (!validIssuer) {
-      res.status(401).json({ error: "Invalid token issuer" });
-      return;
-    }
-
-    if (config.googleClientId && payload.aud !== config.googleClientId) {
-      res.status(401).json({ error: "Invalid token audience" });
-      return;
-    }
-
-    const email = payload.email?.toLowerCase();
-    if (!email) {
-      res.status(400).json({ error: "Email claim is missing in Google ID token" });
-      return;
-    }
-
-    let user = await findUserByEmail(email);
-    if (!user) {
-      const passwordHash = await bcrypt.hash(crypto.randomUUID(), 10);
-      const result = await query(
-        "insert into users (email, password_hash) values ($1, $2) returning id, email",
-        [email, passwordHash]
-      );
-      user = result.rows[0];
-    }
-
-    triggerWarmup();
-
-    res.json({
-      token: signUserToken(user),
-      user: {
-        id: user.id,
-        email: user.email,
-        isAdmin: user.email.toLowerCase() === config.adminEmail.toLowerCase()
-      }
-    });
-  } catch (err) {
-    next(err);
-  }
-});
 
 authRouter.get("/me", requireJwt, (req, res) => {
   res.json({
