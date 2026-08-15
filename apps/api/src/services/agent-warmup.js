@@ -9,6 +9,9 @@ export async function ensureAgentReady(onProgress) {
     return;
   }
 
+  const normalizedAgentUrl = config.agentUrl.replace(/\/$/, "");
+  console.log(`[agent-warmup] resolved agentUrl: ${normalizedAgentUrl}`);
+
   const maxDuration = 300000;
   const startTime = Date.now();
   let currentDelay = 3000;
@@ -20,10 +23,15 @@ export async function ensureAgentReady(onProgress) {
     let shouldRetry = false;
     let retryAfterMs = null;
 
+    console.log(`[agent-warmup] attempt ${attempt}: GET ${normalizedAgentUrl}/health`);
+
     try {
-      const response = await fetch(`${config.agentUrl.replace(/\/$/, "")}/health`, { signal: AbortSignal.timeout(5000) });
+      const response = await fetch(`${normalizedAgentUrl}/health`, { signal: AbortSignal.timeout(5000) });
+
+      console.log(`[agent-warmup] attempt ${attempt}: received status ${response.status}`);
 
       if (response.ok) {
+        console.log(`[agent-warmup] agent ready after ${attempt} attempt(s), ${Math.round((Date.now() - startTime) / 1000)}s elapsed`);
         return;
       }
 
@@ -49,6 +57,8 @@ export async function ensureAgentReady(onProgress) {
         throw new Error(lastErrorMessage);
       }
     } catch (err) {
+      console.log(`[agent-warmup] attempt ${attempt}: request error - ${err.message}`);
+
       if (err.name === "TimeoutError" || err.message.includes("fetch") || err.code === "ECONNREFUSED" || err.code === "ETIMEDOUT") {
         shouldRetry = true;
         lastErrorMessage = err.message;
