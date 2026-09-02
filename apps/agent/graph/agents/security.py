@@ -214,5 +214,6 @@ async def _groq_security_findings(state, context_str):
     try:
         result = await groq_json(system, user)
         return normalize_findings(result, "security")
-    except Exception:
+    except Exception as e:
+        logger.exception("Security agent Groq call failed", error=str(e))
         return []

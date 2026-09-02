@@ -1,10 +1,16 @@
 import contextvars
 import json
 import os
+from pathlib import Path
 from typing import Any
 
 import httpx
 import structlog
+from dotenv import load_dotenv
+
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+load_dotenv(Path(__file__).resolve().parent.parent.parent.parent / ".env")
+load_dotenv()
 
 logger = structlog.get_logger()
 
@@ -64,6 +70,7 @@ def groq_enabled() -> bool:
 async def groq_json(system: str, user: str, *, temperature: float = 0.1, is_warmup: bool = False) -> dict[str, Any]:
     api_key = os.getenv("GROQ_API_KEY")
     if not api_key:
+        logger.error("GROQ_API_KEY is missing or empty in environment")
         return {}
 
     is_real_run = not is_warmup
@@ -73,8 +80,9 @@ async def groq_json(system: str, user: str, *, temperature: float = 0.1, is_warm
     success = False
     try:
         import asyncio
+        import re
         payload = {
-            "model": os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile"),
+            "model": os.getenv("GROQ_MODEL", "qwen/qwen3.6-27b"),
             "temperature": temperature,
             "response_format": {"type": "json_object"},
             "messages": [
@@ -102,20 +110,46 @@ async def groq_json(system: str, user: str, *, temperature: float = 0.1, is_warm
                     raw_response_var.set([*raw_response_var.get(), content])
                 try:
                     success = True
-                    return json.loads(content)
-                except json.JSONDecodeError:
+                    cleaned = content.strip()
+                    if cleaned.startswith("```json"):
+                        cleaned = cleaned[7:]
+                    elif cleaned.startswith("```"):
+                        cleaned = cleaned[3:]
+                    if cleaned.endswith("```"):
+                        cleaned = cleaned[:-3]
+                    return json.loads(cleaned.strip())
+                except json.JSONDecodeError as jde:
+                    match = re.search(r"\{.*\}", content, re.DOTALL)
+                    if match:
+                        try:
+                            return json.loads(match.group(0))
+                        except Exception:
+                            pass
+                    logger.error("Failed to parse Groq response as JSON", content=content, error=str(jde))
                     return {}
             except httpx.HTTPStatusError as e:
+                logger.error("Groq HTTP status error", status_code=e.response.status_code, error_body=e.response.text, attempt=attempt, model=payload.get("model"))
+                if e.response.status_code == 404 and "model_not_found" in e.response.text and payload["model"] != "qwen/qwen3.6-27b":
+                    logger.warning("Groq model not found; falling back to qwen/qwen3.6-27b", failed_model=payload["model"])
+                    payload["model"] = "qwen/qwen3.6-27b"
+                    continue
+                if e.response.status_code == 400 and "json_validate_failed" in e.response.text and "response_format" in payload:
+                    logger.warning("Groq json_validate_failed; retrying without response_format constraint", attempt=attempt)
+                    payload = dict(payload)
+                    del payload["response_format"]
+                    continue
                 if e.response.status_code == 429 and attempt < 4:
                     await asyncio.sleep((attempt + 1) * 3)
                     continue
                 raise e
             except (httpx.ConnectError, httpx.TimeoutException) as e:
+                logger.error("Groq network or timeout error", error=str(e), attempt=attempt)
                 if attempt < 4:
                     await asyncio.sleep((attempt + 1) * 3)
                     continue
                 raise e
     except Exception as e:
+        logger.exception("Groq API call encountered unhandled exception", error=str(e))
         if is_real_run:
             await report_status("llm", "down")
         raise e

@@ -116,7 +116,8 @@ async def _groq_style_findings(state, context_str):
     try:
         result = await groq_json(system, user)
         return normalize_findings(result, "style")
-    except Exception:
+    except Exception as e:
+        logger.exception("Style agent Groq call failed", error=str(e))
         return []
 
 

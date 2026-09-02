@@ -38,7 +38,8 @@ async def supervisor_node(state: GraphState) -> GraphState:
     try:
         result = await groq_json(system, user)
         plan = result.get("agent_plan", ["security", "performance", "style"])
-    except Exception:
+    except Exception as e:
+        logger.exception("Supervisor routing failed, using fallback plan", error=str(e))
         plan = ["security", "performance", "style"]
     duration = int((time.perf_counter() - start_time) * 1000)
     tokens_used = token_usage_var.get() - tokens_before

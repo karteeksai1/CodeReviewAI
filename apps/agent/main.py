@@ -12,6 +12,8 @@ from pydantic import BaseModel, Field
 
 from llm.groq import request_id_var, token_usage_var
 
+load_dotenv(Path(__file__).resolve().parent / ".env")
+load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env")
 load_dotenv()
 
 structlog.configure(
@@ -22,6 +24,11 @@ structlog.configure(
     ]
 )
 logger = structlog.get_logger()
+logger.info(
+    "Agent startup environment checked",
+    groq_key_configured=bool(os.getenv("GROQ_API_KEY")),
+    groq_model=os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
+)
 
 app = FastAPI(title="CodeReviewAI Agent")
 

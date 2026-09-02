@@ -170,5 +170,6 @@ async def _groq_performance_findings(state, context_str):
     try:
         result = await groq_json(system, user)
         return normalize_findings(result, "performance")
-    except Exception:
+    except Exception as e:
+        logger.exception("Performance agent Groq call failed", error=str(e))
         return []
