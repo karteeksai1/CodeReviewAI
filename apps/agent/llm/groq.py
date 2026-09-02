@@ -24,6 +24,7 @@ raw_response_log = []
 
 in_flight_groq_calls = 0
 in_flight_lock = None
+groq_semaphore = None
 
 
 async def report_status(service: str, status: str):
@@ -81,8 +82,11 @@ async def groq_json(system: str, user: str, *, temperature: float = 0.1, is_warm
     try:
         import asyncio
         import re
+        global groq_semaphore
+        if groq_semaphore is None:
+            groq_semaphore = asyncio.Semaphore(1)
         payload = {
-            "model": os.getenv("GROQ_MODEL", "qwen/qwen3.6-27b"),
+            "model": os.getenv("GROQ_MODEL", "openai/gpt-oss-20b"),
             "temperature": temperature,
             "response_format": {"type": "json_object"},
             "messages": [
@@ -93,13 +97,14 @@ async def groq_json(system: str, user: str, *, temperature: float = 0.1, is_warm
         timeout = httpx.Timeout(float(os.getenv("GROQ_TIMEOUT_SECONDS", "30")))
         for attempt in range(5):
             try:
-                async with httpx.AsyncClient(timeout=timeout) as client:
-                    response = await client.post(
-                        GROQ_CHAT_URL,
-                        headers={"authorization": f"Bearer {api_key}", "content-type": "application/json"},
-                        json=payload,
-                    )
-                    response.raise_for_status()
+                async with groq_semaphore:
+                    async with httpx.AsyncClient(timeout=timeout) as client:
+                        response = await client.post(
+                            GROQ_CHAT_URL,
+                            headers={"authorization": f"Bearer {api_key}", "content-type": "application/json"},
+                            json=payload,
+                        )
+                        response.raise_for_status()
                 res_data = response.json()
                 usage = res_data.get("usage", {})
                 tokens = usage.get("total_tokens", 0)
@@ -110,22 +115,23 @@ async def groq_json(system: str, user: str, *, temperature: float = 0.1, is_warm
                     raw_response_var.set([*raw_response_var.get(), content])
                 try:
                     success = True
-                    cleaned = content.strip()
+                    cleaned = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL).strip()
                     if cleaned.startswith("```json"):
                         cleaned = cleaned[7:]
                     elif cleaned.startswith("```"):
                         cleaned = cleaned[3:]
                     if cleaned.endswith("```"):
                         cleaned = cleaned[:-3]
-                    return json.loads(cleaned.strip())
-                except json.JSONDecodeError as jde:
-                    match = re.search(r"\{.*\}", content, re.DOTALL)
-                    if match:
-                        try:
+                    cleaned = cleaned.strip()
+                    try:
+                        return json.loads(cleaned)
+                    except json.JSONDecodeError:
+                        match = re.search(r"\{.*\}", cleaned, re.DOTALL)
+                        if match:
                             return json.loads(match.group(0))
-                        except Exception:
-                            pass
-                    logger.error("Failed to parse Groq response as JSON", content=content, error=str(jde))
+                        raise
+                except Exception as jde:
+                    logger.error("Failed to parse Groq response as JSON", content=content[:300], error=str(jde))
                     return {}
             except httpx.HTTPStatusError as e:
                 logger.error("Groq HTTP status error", status_code=e.response.status_code, error_body=e.response.text, attempt=attempt, model=payload.get("model"))
@@ -139,7 +145,13 @@ async def groq_json(system: str, user: str, *, temperature: float = 0.1, is_warm
                     del payload["response_format"]
                     continue
                 if e.response.status_code == 429 and attempt < 4:
-                    await asyncio.sleep((attempt + 1) * 3)
+                    match = re.search(r"try again in ([\d\.]+)s", e.response.text)
+                    if match:
+                        sleep_time = float(match.group(1)) + 1.0
+                    else:
+                        sleep_time = float(e.response.headers.get("retry-after", (attempt + 1) * 3))
+                    logger.warning("Groq rate limited (429); sleeping before retry", sleep_seconds=sleep_time, attempt=attempt)
+                    await asyncio.sleep(sleep_time)
                     continue
                 raise e
             except (httpx.ConnectError, httpx.TimeoutException) as e:

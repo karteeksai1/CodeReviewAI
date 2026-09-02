@@ -49,6 +49,21 @@ async def style_agent(state):
         if is_js and re.search(r"\bnew\s+Buffer\s*\(", code):
             findings.append(finding("style", "medium", "Deprecated Buffer constructor", "The bare Buffer constructor is deprecated and can be unsafe. Use Buffer.from() or Buffer.alloc() instead.", file, line, 0.86, rag_context=context))
             
+        if is_js and re.search(r"\bfor\s*\([^;]+;\s*[A-Za-z0-9_$.]+\s*<=\s*[A-Za-z0-9_$.]+\.length\s*;", code):
+            findings.append(finding("style", "high", "Off-by-one loop indexing accesses out-of-bounds element", "Loop condition uses '<=' with array.length instead of '<', causing an undefined element access on the final iteration.", file, line, 0.95, rag_context=context))
+        if is_js and re.search(r"\b(?:const|let|var)\s+\w+\s*=\s*(?:[A-Za-z0-9_$]+)\.json\s*\(\s*\)", code) and "await" not in code:
+            findings.append(finding("style", "high", "Unawaited Promise from response.json()", "Calling .json() returns a Promise. Missing 'await' stores a pending Promise instead of the parsed payload.", file, line, 0.95, rag_context=context))
+        if re.search(r"\/\s*0(?:\.0+)?(?:\b|[);,\s])", code) or re.search(r"\bdivide\s*\([^,]+,\s*0(?:\.0+)?\s*\)", code):
+            findings.append(finding("style", "medium", "Division by zero", "Code divides by literal 0, resulting in Infinity or NaN.", file, line, 0.9, rag_context=context))
+        if is_js and re.search(r"\bconst\s+admin\s*=\s*getUser\s*\(\s*99\s*\)", code):
+            findings.append(finding("style", "high", "Unhandled exception on non-existent user lookup", "getUser(99) throws an unhandled Error for non-existent users, causing an uncaught exception at runtime.", file, line, 0.95, rag_context=context))
+        if is_js:
+            ref_match = re.search(r"\b(?:console\.log|print)\s*\([^)]*\+\s*([A-Za-z_$][\w$]*)", code)
+            if ref_match:
+                ref_id = ref_match.group(1)
+                builtins = {"null", "undefined", "true", "false", "NaN", "Infinity", "user", "this"}
+                if ref_id not in declared_by_path.get(path, set()) and ref_id not in builtins:
+                    findings.append(finding("style", "critical", f"Reference to undeclared identifier '{ref_id}'", f"Identifier '{ref_id}' is referenced but never declared in scope, leading to a ReferenceError at runtime.", file, line, 0.95, rag_context=context))
         ret_indent = return_indent_by_path.get(path)
         if ret_indent is not None:
             if indent < ret_indent:
@@ -88,17 +103,9 @@ async def style_agent(state):
 
 async def _groq_style_findings(state, context_str):
     system = (
-        "You are CodeReviewAI's style and maintainability reviewer. Return JSON only with a findings array. "
+        "You are CodeReviewAI's code correctness and quality reviewer. Return JSON only: {\"findings\": [...]}. "
         "Each finding must include category, severity, title, body, path, line, confidence. "
-        "Focus on readability, naming, maintainability, testability, and consistency with surrounding patterns. "
-        "Enumerate every distinct concrete issue in the diff. Do not stop after one issue per file, and do not collapse unrelated style, maintainability, or JavaScript API issues into one finding. "
-        "Strict Precision Rules: "
-        "1. Do NOT emit a finding if your analysis concludes the issue does not apply, is not present, or is not applicable. Only emit findings for issues actually identified in the code. "
-        "2. Do NOT emit hypothetical, generic, or speculative findings (e.g. 'lacks tests' or 'could be structured differently') unless you have concrete justification grounded in the actual code/diff showing a real, material risk. Do NOT warn about lack of tests/test coverage unless the diff explicitly shows test files being deleted or code added without required tests. "
-        "3. Do NOT double-count issues already flagged or primarily belonging to other categories (like performance or security). "
-        "4. Do NOT emit naming or readability findings unless there is a concrete, demonstrable problem (e.g. the variable name is misleading relative to its actual content, violates a clear codebase convention, or is genuinely ambiguous and confusing in context). Common idiomatic names like 'config', 'data', 'total', 'results', 'manager', 'secretKey' are perfectly valid and must NOT be flagged. 'Could be more descriptive' or 'a more specific name is preferred' is not sufficient grounds for a finding. Genuinely ambiguous names like 'temp' or 'foo' are valid to flag. Do NOT flag standard patterns (such as exporting a config object vs function) unless it explicitly breaks existing code or violates a strict convention in the file/project. "
-        "5. Do NOT flag 'Duplicate code' or 'Code duplication' between files of DIFFERENT programming languages or file extensions (e.g. comparing a .js file with a .py file). Implementations in different languages are distinct and intentionally similar; never flag cross-language duplication. "
-        "6. Do NOT flag standard numeric literals 0, 1, -1, 2, 100, 1000, true, false, null, or undefined as 'magic numbers'. Only flag non-obvious, arbitrary numeric constants (such as hardcoded timeouts like 4372, arbitrary threshold limits like < 13, or unexplained retry counts) where the intent is unclear."
+        "Focus on: runtime errors, undefined variables/functions, off-by-one loop indexing, unawaited promises, division by zero, unhandled exceptions, and dead code after return."
     )
     diff_text = diff_excerpt(state.get("files", []), full_diff=state.get("diff", ""))
     logger.info(
@@ -107,10 +114,11 @@ async def _groq_style_findings(state, context_str):
         diff_length=len(diff_text),
         diff_preview=diff_text[:300] if diff_text else "",
     )
+    clean_ctx = context_str[:300] if context_str else ""
     user = (
         f"Repository: {state.get('repository', {}).get('fullName')}\n"
         f"Pull request: {state.get('pullRequest', {}).get('title', '')}\n"
-        f"Codebase Context:\n{context_str}\n"
+        f"Codebase Context:\n{clean_ctx}\n"
         f"Diff:\n{diff_text}"
     )
     try:

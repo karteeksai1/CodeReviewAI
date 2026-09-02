@@ -19,10 +19,13 @@ async def supervisor_node(state: GraphState) -> GraphState:
     start_time = time.perf_counter()
     tokens_before = token_usage_var.get()
     system = (
-        "You are a routing supervisor for CodeReviewAI. Analyze the provided PR diff and file paths. "
-        "Decide which review agents need to run. Options are: 'security', 'performance', 'style'. "
-        "Return a JSON object with a single key 'agent_plan' containing a list of the chosen agents. "
-        "Always include 'style'."
+        "You are routing supervisor for CodeReviewAI. Return JSON only: {\"agent_plan\": [...]}. "
+        "Available agents: 'security', 'performance', 'style'. "
+        "Rules: "
+        "- Include 'security' only if diff touches auth, secrets, crypto, input validation, SQL, or shell commands. "
+        "- Include 'performance' only if diff touches database queries, caching, concurrency, or unbounded loops. "
+        "- Always include 'style' for bugs, runtime errors, and code quality. "
+        "Select only strictly relevant agents to conserve resources."
     )
     diff_content = state.get("diff", "")
     if not diff_content:
@@ -170,9 +173,9 @@ def get_graph():
     workflow.add_node("github_poster", github_poster_node)
     workflow.add_edge(START, "supervisor")
     workflow.add_edge("supervisor", "security")
-    workflow.add_edge("supervisor", "performance")
-    workflow.add_edge("supervisor", "style")
-    workflow.add_edge(["security", "performance", "style"], "aggregator")
+    workflow.add_edge("security", "performance")
+    workflow.add_edge("performance", "style")
+    workflow.add_edge("style", "aggregator")
     workflow.add_edge("aggregator", "github_poster")
     workflow.add_edge("github_poster", END)
     GRAPH = workflow.compile()
@@ -199,8 +202,15 @@ async def run_review(payload: dict[str, Any]) -> dict[str, Any]:
         from graph.nodes.aggregator import aggregate_findings
         from graph.nodes.github_poster import prepare_github_post
         state.update(await supervisor_node(state))
-        security, performance, style = await asyncio.gather(security_agent(state), performance_agent(state), style_agent(state))
-        state["findings"] = security + performance + style
+        plan = state.get("agent_plan", ["security", "performance", "style"])
+        agent_findings = []
+        if "security" in plan:
+            agent_findings.extend(await security_agent(state))
+        if "performance" in plan:
+            agent_findings.extend(await performance_agent(state))
+        if "style" in plan:
+            agent_findings.extend(await style_agent(state))
+        state["findings"] = agent_findings
         state.update(aggregate_findings(state))
         state.update(await prepare_github_post(state))
         final_state = state

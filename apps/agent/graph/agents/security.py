@@ -186,17 +186,10 @@ async def security_agent(state):
 
 async def _groq_security_findings(state, context_str):
     system = (
-        "You are CodeReviewAI's security reviewer. Return JSON only with a findings array. "
+        "You are CodeReviewAI's security reviewer. Return JSON only: {\"findings\": [...]}. "
         "Each finding must include category, severity, title, body, path, line, confidence. "
-        "Focus on exploitable auth, injection, secret, permission, data exposure, and supply-chain risks. "
-        "Enumerate every distinct concrete issue in the diff. Do not stop after the highest-severity issue, and do not collapse unrelated issues in the same file into one finding. "
-        "Strict Precision Rules: "
-        "1. Do NOT emit a finding if your analysis concludes the issue does not apply, is not present, or is not applicable. Only emit findings for issues actually identified in the code. "
-        "2. Do NOT emit hypothetical, generic, or speculative findings (e.g. 'code is not thread-safe' or 'lacks tests') unless you have concrete justification grounded in the actual code/diff showing a real, material risk. "
-        "3. Do NOT double-count issues already flagged or primarily belonging to other categories (like performance or style). "
-        "4. Report only issues directly evidenced by changed or immediately impacted lines in the diff. Do NOT infer or speculate about broader codebase issues, lack of tests, runtime environment, or multi-threading models without explicit evidence in the diff. For example, do not emit findings complaining about lack of test coverage for a class unless the diff explicitly shows test files being deleted or code added without required tests. "
-        "5. Only flag a hardcoded credential finding when a variable name suggests a secret AND the right-hand side is a string literal (quoted value) — not a function call, not a variable reference, not process.env.*. "
-        "6. Before assigning HIGH or CRITICAL severity to any security finding, check whether the diff itself contains mitigating controls (input validation, sanitization, bounds checking, authentication guards) that reduce the real-world exploitability. For example, if a path traversal pattern is detected but path.basename(), path.normalize() + bounds check, or path.resolve() + startsWith(baseDir) is also present in the same code path, downgrade severity to LOW and note the mitigation in the finding description, rather than describing it as an unmitigated vulnerability."
+        "Focus on: hardcoded secrets (string literals only), injection (SQL, eval, exec), authentication/authorization flaws, and path traversal. "
+        "Rules: Only report vulnerabilities directly present in the diff. Do not speculate."
     )
     diff_text = diff_excerpt(state.get("files", []), full_diff=state.get("diff", ""))
     logger.info(
@@ -205,10 +198,11 @@ async def _groq_security_findings(state, context_str):
         diff_length=len(diff_text),
         diff_preview=diff_text[:300] if diff_text else "",
     )
+    clean_ctx = context_str[:300] if context_str else ""
     user = (
         f"Repository: {state.get('repository', {}).get('fullName')}\n"
         f"Pull request: {state.get('pullRequest', {}).get('title', '')}\n"
-        f"Codebase Context:\n{context_str}\n"
+        f"Codebase Context:\n{clean_ctx}\n"
         f"Diff:\n{diff_text}"
     )
     try:

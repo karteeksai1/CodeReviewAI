@@ -93,6 +93,47 @@ export function runDeterministicChecks(files) {
           metadata: { provider: "deterministic" }
         });
       }
+      const lines = content.split("\n");
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const lineNum = i + 1;
+        if (/\bfor\s*\([^;]+;\s*[A-Za-z0-9_$.]+\s*<=\s*[A-Za-z0-9_$.]+\.length\s*;/.test(line)) {
+          findings.push({
+            category: "correctness",
+            severity: "high",
+            title: "Off-by-one loop indexing accesses out-of-bounds element",
+            body: "Loop condition uses '<=' with array.length instead of '<', causing an undefined element access on the final iteration.",
+            path,
+            line: lineNum,
+            confidence: 1.0,
+            metadata: { provider: "deterministic" }
+          });
+        }
+        if (/\b(?:const|let|var)\s+\w+\s*=\s*(?:[A-Za-z0-9_$]+)\.json\s*\(\s*\)/.test(line) && !line.includes("await")) {
+          findings.push({
+            category: "correctness",
+            severity: "high",
+            title: "Unawaited Promise from response.json()",
+            body: "Calling .json() returns a Promise. Missing 'await' stores a pending Promise instead of parsed data.",
+            path,
+            line: lineNum,
+            confidence: 1.0,
+            metadata: { provider: "deterministic" }
+          });
+        }
+        if (/\/\s*0(?:\.0+)?(?:\b|[);,\s])/.test(line) && !line.trim().startsWith("//") && !line.trim().startsWith("/*")) {
+          findings.push({
+            category: "correctness",
+            severity: "medium",
+            title: "Division by zero",
+            body: "Code divides by literal 0, resulting in Infinity or NaN.",
+            path,
+            line: lineNum,
+            confidence: 0.95,
+            metadata: { provider: "deterministic" }
+          });
+        }
+      }
     } else if (isPy && content) {
       const err = checkPySyntax(content);
       if (err) {
