@@ -92,6 +92,29 @@ const worker = new Worker(REVIEW_QUEUE_NAME, async (job) => {
       mergeableState: context.pullRequest.mergeableState,
       conflictDetails: context.pullRequest.conflictDetails
     });
+    const totalPatchChars = (context.files || []).reduce((sum, f) => sum + (f.patch ? f.patch.length : 0), 0);
+    logger.info(
+      {
+        jobId: job.id,
+        pullNumber: pullRequest.number,
+        fileCount: context.files?.length || 0,
+        totalPatchChars,
+        diffLength: context.diff?.length || 0,
+        files: (context.files || []).map((f) => ({ path: f.path, status: f.status, patchLength: (f.patch || "").length }))
+      },
+      "Dispatching review payload to agent"
+    );
+    if (totalPatchChars < 15 && (!context.diff || context.diff.trim().length < 15)) {
+      logger.warn(
+        {
+          jobId: job.id,
+          pullNumber: pullRequest.number,
+          totalPatchChars,
+          diffLength: context.diff?.length || 0
+        },
+        "Diff resolved to empty or near-empty content; review may yield 0 findings"
+      );
+    }
     const agentResult = await requestAgentReview(context, requestId, async (status) => {
       await updateReview(review?.id, { status });
     });
@@ -130,6 +153,9 @@ const worker = new Worker(REVIEW_QUEUE_NAME, async (job) => {
       const sorted = [...findings].sort((a, b) => (severityWeights[b.severity] ?? 0) - (severityWeights[a.severity] ?? 0));
       const highestPriority = sorted[0];
       finalSummary = `Detected ${findings.length} finding(s). Highest priority: ${highestPriority.severity} ${highestPriority.category} issue, ${highestPriority.title}.`;
+    }
+    if (findings.length === 0 && totalPatchChars < 15 && (!context.diff || context.diff.trim().length < 15)) {
+      finalSummary = "Warning: Diff resolved to empty or near-empty content. No code was available to review.";
     }
     const posted = await postReviewSummary({ owner, repo, pullNumber: pullRequest.number, installationId, headSha: context.pullRequest.headSha, summary: finalSummary, findings, files: context.files });
     await updateReview(review?.id, { status: "completed", summary: finalSummary, riskScore: finalRiskScore, postedToGithub: posted, completedAt: new Date() });

@@ -1,6 +1,7 @@
 import { createAppAuth } from "@octokit/auth-app";
 import { Octokit } from "@octokit/rest";
 import { config } from "../config.js";
+import { logger } from "../logger.js";
 
 function assertGitHubConfig() {
   if (!config.github.appId || !config.github.privateKey) {
@@ -13,6 +14,25 @@ export async function getInstallationOctokit(installationId) {
   const auth = createAppAuth({ appId: config.github.appId, privateKey: config.github.privateKey, installationId });
   const installationAuth = await auth({ type: "installation" });
   return new Octokit({ auth: installationAuth.token });
+}
+
+export function extractPatchFromDiff(rawDiff, filename) {
+  if (!rawDiff || !filename) return "";
+  const chunks = rawDiff.split(/\ndiff --git /);
+  for (let i = 0; i < chunks.length; i++) {
+    let chunk = chunks[i];
+    if (i > 0) {
+      chunk = "diff --git " + chunk;
+    }
+    const headerMatch = chunk.match(/^diff --git a\/(.+?) b\/(.+?)(?:\n|$)/m);
+    if (headerMatch && (headerMatch[1] === filename || headerMatch[2] === filename)) {
+      const hunkIndex = chunk.indexOf("\n@@");
+      if (hunkIndex !== -1) {
+        return chunk.slice(hunkIndex + 1);
+      }
+    }
+  }
+  return "";
 }
 
 export function getChangedLineRanges(patch) {
@@ -139,6 +159,7 @@ export async function fetchPullRequestContext({ owner, repo, pullNumber, install
     } catch (err) {
     }
   }
+  const rawDiff = String(diffResponse?.data ?? "");
   const detailedFiles = await Promise.all(
     files.map(async (file) => {
       let content = "";
@@ -155,13 +176,34 @@ export async function fetchPullRequestContext({ owner, repo, pullNumber, install
           }
         } catch (err) {}
       }
+      let patch = file.patch ?? "";
+      let patchSource = "github_api";
+      if (!patch && rawDiff) {
+        patch = extractPatchFromDiff(rawDiff, file.filename);
+        if (patch) patchSource = "extracted_from_diff";
+      }
+      if (!patch && file.status === "added" && content) {
+        const contentLines = content.split("\n");
+        patch = `@@ -0,0 +1,${contentLines.length} @@\n` + contentLines.map((l) => `+${l}`).join("\n");
+        patchSource = "synthesized_from_content";
+      }
+      logger.info(
+        {
+          path: file.filename,
+          status: file.status,
+          patchSource,
+          patchLength: patch.length,
+          patchLines: patch ? patch.split("\n").length : 0
+        },
+        "File diff prepared"
+      );
       return {
         path: file.filename,
         status: file.status,
         additions: file.additions,
         deletions: file.deletions,
         changes: file.changes,
-        patch: file.patch ?? "",
+        patch,
         content
       };
     })

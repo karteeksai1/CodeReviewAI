@@ -1,9 +1,12 @@
 import asyncio
 import re
+import structlog
 
 from graph.agents.common import finding, iter_added_lines
 from llm.groq import diff_excerpt, groq_json, normalize_findings
 from rag import retrieve_context
+
+logger = structlog.get_logger()
 
 
 async def style_agent(state):
@@ -97,11 +100,18 @@ async def _groq_style_findings(state, context_str):
         "5. Do NOT flag 'Duplicate code' or 'Code duplication' between files of DIFFERENT programming languages or file extensions (e.g. comparing a .js file with a .py file). Implementations in different languages are distinct and intentionally similar; never flag cross-language duplication. "
         "6. Do NOT flag standard numeric literals 0, 1, -1, 2, 100, 1000, true, false, null, or undefined as 'magic numbers'. Only flag non-obvious, arbitrary numeric constants (such as hardcoded timeouts like 4372, arbitrary threshold limits like < 13, or unexplained retry counts) where the intent is unclear."
     )
+    diff_text = diff_excerpt(state.get("files", []), full_diff=state.get("diff", ""))
+    logger.info(
+        "Style agent prompt diff prepared",
+        pr=state.get("pullRequest", {}).get("number"),
+        diff_length=len(diff_text),
+        diff_preview=diff_text[:300] if diff_text else "",
+    )
     user = (
         f"Repository: {state.get('repository', {}).get('fullName')}\n"
         f"Pull request: {state.get('pullRequest', {}).get('title', '')}\n"
         f"Codebase Context:\n{context_str}\n"
-        f"Diff:\n{diff_excerpt(state.get('files', []))}"
+        f"Diff:\n{diff_text}"
     )
     try:
         result = await groq_json(system, user)

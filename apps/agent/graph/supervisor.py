@@ -24,7 +24,17 @@ async def supervisor_node(state: GraphState) -> GraphState:
         "Return a JSON object with a single key 'agent_plan' containing a list of the chosen agents. "
         "Always include 'style'."
     )
-    user = f"Diff:\n{state.get('diff', '')}"
+    diff_content = state.get("diff", "")
+    if not diff_content:
+        from llm.groq import diff_excerpt
+        diff_content = diff_excerpt(state.get("files", []))
+    user = f"Diff:\n{diff_content}"
+    logger.info(
+        "Supervisor dispatch diff prepared",
+        request_id=req_id,
+        diff_length=len(diff_content),
+        diff_preview=diff_content[:300] if diff_content else "",
+    )
     try:
         result = await groq_json(system, user)
         plan = result.get("agent_plan", ["security", "performance", "style"])
@@ -193,6 +203,15 @@ async def run_review(payload: dict[str, Any]) -> dict[str, Any]:
         state.update(aggregate_findings(state))
         state.update(await prepare_github_post(state))
         final_state = state
+    actual_code_chars = sum(len((f.get("patch") or "").strip()) for f in payload.get("files", []))
+    diff_chars = len(payload.get("diff", "").strip())
+    if actual_code_chars < 15 and diff_chars < 15:
+        logger.warning(
+            "Empty or near-empty diff detected for PR review",
+            pr=payload.get("pullRequest", {}).get("number"),
+            file_count=len(payload.get("files", [])),
+            diff_length=diff_chars,
+        )
     completed = datetime.now(timezone.utc)
     duration_ms = int((perf_counter() - timer) * 1000)
     planned = set(final_state.get("agent_plan", ["security", "performance", "style"]))
@@ -215,8 +234,11 @@ async def run_review(payload: dict[str, Any]) -> dict[str, Any]:
         }
         for agent in ["security", "performance", "style"]
     ]
+    summary = final_state.get("summary", "Review complete.")
+    if not findings and actual_code_chars < 15 and diff_chars < 15:
+        summary = "Warning: Empty or near-empty diff detected for this pull request. No files could be analyzed."
     return {
-        "summary": final_state.get("summary", "Review complete."),
+        "summary": summary,
         "risk_score": final_state.get("risk_score", 0),
         "findings": findings,
         "markdown": final_state.get("markdown", ""),

@@ -4,6 +4,9 @@ import os
 from typing import Any
 
 import httpx
+import structlog
+
+logger = structlog.get_logger()
 
 GROQ_CHAT_URL = "https://api.groq.com/openai/v1/chat/completions"
 
@@ -121,15 +124,51 @@ async def groq_json(system: str, user: str, *, temperature: float = 0.1, is_warm
             await decrement_groq_calls(success)
 
 
-def diff_excerpt(files: list[dict[str, Any]], *, max_chars: int = 64000) -> str:
+def extract_file_patch_from_diff(full_diff: str, filename: str) -> str:
+    if not full_diff or not filename:
+        return ""
+    chunks = full_diff.split("\ndiff --git ")
+    for idx, chunk in enumerate(chunks):
+        if idx > 0:
+            chunk = "diff --git " + chunk
+        lines = chunk.splitlines()
+        if not lines:
+            continue
+        first_line = lines[0]
+        if f"b/{filename}" in first_line or f"a/{filename}" in first_line:
+            hunk_idx = chunk.find("\n@@")
+            if hunk_idx != -1:
+                return chunk[hunk_idx + 1:]
+    return ""
+
+
+def diff_excerpt(files: list[dict[str, Any]], full_diff: str = "", *, max_chars: int = 64000) -> str:
     parts = []
     total = 0
     for file in files:
         if file.get("status") == "removed":
             continue
         header = f"\n--- {file.get('path', 'unknown')} ({file.get('status', 'modified')}) ---\n"
-        patch = file.get("patch", "")
+        patch = (file.get("patch") or "").strip()
+        source = "file_patch"
+        if not patch and full_diff:
+            extracted = extract_file_patch_from_diff(full_diff, file.get("path", ""))
+            if extracted:
+                patch = extracted.strip()
+                source = "full_diff"
+        if not patch and file.get("status") == "added" and file.get("content"):
+            content_lines = file.get("content", "").splitlines()
+            patch = f"@@ -0,0 +1,{len(content_lines)} @@\n" + "\n".join(f"+{line}" for line in content_lines)
+            source = "synthesized_from_content"
         chunk = header + patch
+        logger.info(
+            "Prepared file diff excerpt",
+            path=file.get("path"),
+            status=file.get("status"),
+            patch_source=source,
+            patch_length=len(patch),
+            patch_lines=len(patch.splitlines()) if patch else 0,
+        )
         if total + len(chunk) > max_chars:
             remaining = max_chars - total
             if remaining > len(header):
@@ -137,7 +176,15 @@ def diff_excerpt(files: list[dict[str, Any]], *, max_chars: int = 64000) -> str:
             break
         parts.append(chunk)
         total += len(chunk)
-    return "".join(parts)
+    result = "".join(parts)
+    actual_code_chars = sum(len((file.get("patch") or "").strip()) for file in files)
+    if not actual_code_chars and len(result.strip()) < 30:
+        logger.warning(
+            "Empty or near-empty diff excerpt generated",
+            file_count=len(files),
+            total_chars=len(result),
+        )
+    return result
 
 
 def normalize_findings(raw: Any, category: str) -> list[dict[str, Any]]:

@@ -33,6 +33,7 @@ class FilePatch(BaseModel):
     deletions: int = 0
     changes: int = 0
     patch: str = ""
+    content: str = ""
 
 
 class PullRequest(BaseModel):

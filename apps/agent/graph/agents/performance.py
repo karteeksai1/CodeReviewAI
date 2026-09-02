@@ -154,11 +154,18 @@ async def _groq_performance_findings(state, context_str):
         "5. Do not suggest database optimizations, caching strategies, or query patterns unless the diff itself contains actual database query code. The possibility of the code interacting with a database elsewhere is not sufficient grounds for a finding. "
         "6. Do NOT flag standard, local, or memory-bound loops (such as iterating over a local array, list, or parameter array like 'for item in numbers' or 'for (let i = 0; i < items.length; i++)') as 'Unbounded Work' or performance issues. Iterating over a local collection in O(n) is expected and standard. Only report potential unbounded work when the collection is fetched directly from an external/untrusted source (such as unpaginated database queries, large streaming files/CSVs, or external API responses) without batching, pagination, or limits, or when the loop is an infinite loop ('while True', 'while (queue.length)') without clear termination/break conditions."
     )
+    diff_text = diff_excerpt(state.get("files", []), full_diff=state.get("diff", ""))
+    logger.info(
+        "Performance agent prompt diff prepared",
+        pr=state.get("pullRequest", {}).get("number"),
+        diff_length=len(diff_text),
+        diff_preview=diff_text[:300] if diff_text else "",
+    )
     user = (
         f"Repository: {state.get('repository', {}).get('fullName')}\n"
         f"Pull request: {state.get('pullRequest', {}).get('title', '')}\n"
         f"Codebase Context:\n{context_str}\n"
-        f"Diff:\n{diff_excerpt(state.get('files', []))}"
+        f"Diff:\n{diff_text}"
     )
     try:
         result = await groq_json(system, user)

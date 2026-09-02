@@ -198,11 +198,18 @@ async def _groq_security_findings(state, context_str):
         "5. Only flag a hardcoded credential finding when a variable name suggests a secret AND the right-hand side is a string literal (quoted value) — not a function call, not a variable reference, not process.env.*. "
         "6. Before assigning HIGH or CRITICAL severity to any security finding, check whether the diff itself contains mitigating controls (input validation, sanitization, bounds checking, authentication guards) that reduce the real-world exploitability. For example, if a path traversal pattern is detected but path.basename(), path.normalize() + bounds check, or path.resolve() + startsWith(baseDir) is also present in the same code path, downgrade severity to LOW and note the mitigation in the finding description, rather than describing it as an unmitigated vulnerability."
     )
+    diff_text = diff_excerpt(state.get("files", []), full_diff=state.get("diff", ""))
+    logger.info(
+        "Security agent prompt diff prepared",
+        pr=state.get("pullRequest", {}).get("number"),
+        diff_length=len(diff_text),
+        diff_preview=diff_text[:300] if diff_text else "",
+    )
     user = (
         f"Repository: {state.get('repository', {}).get('fullName')}\n"
         f"Pull request: {state.get('pullRequest', {}).get('title', '')}\n"
         f"Codebase Context:\n{context_str}\n"
-        f"Diff:\n{diff_excerpt(state.get('files', []))}"
+        f"Diff:\n{diff_text}"
     )
     try:
         result = await groq_json(system, user)
