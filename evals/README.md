@@ -116,3 +116,27 @@ Matching enforces strict 1-to-1 assignment. When multiple ground-truth items mat
 - **Recall by Category**: Detection recall broken down per category (`BUG`, `PERFORMANCE`, `SECURITY`, `STYLE`).
 - **False Positives List**: Detailed listing of unmatched predicted findings.
 - **False Negatives List**: Detailed listing of missed ground-truth findings.
+
+## Baseline Benchmark Results (Review ID: 94)
+
+The baseline benchmark run evaluated against `ground_truth.json`:
+
+```text
+CODE REVIEW EVALUATION
+============================
+Ground truth findings : 74
+Predicted findings    : 29
+True positives        : 22
+False positives       : 7
+False negatives       : 52
+Precision             : 75.86%
+Recall                : 29.73%
+F1                    : 42.72%
+Severity accuracy     : 81.82%
+
+Recall by category
+BUG          4/15 (26.67%)
+PERFORMANCE  3/18 (16.67%)
+SECURITY     14/22 (63.64%)
+STYLE        1/19 (5.26%)
+```
