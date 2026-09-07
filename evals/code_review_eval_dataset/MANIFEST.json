@@ -1,0 +1,8 @@
+{
+  "total_files": 30,
+  "python_files": 15,
+  "javascript_typescript_files": 15,
+  "clean_files": 6,
+  "faulty_files": 24,
+  "ground_truth_findings": 74
+}

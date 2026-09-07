@@ -1,0 +1,670 @@
+{
+  "findings": [
+    {
+      "id": "py_04_bug.py-01",
+      "file": "python/py_04_bug.py",
+      "language": "python",
+      "category": "BUG",
+      "severity": "HIGH",
+      "line": 7,
+      "description": "get_user can raise StopIteration when the requested user is missing"
+    },
+    {
+      "id": "py_04_bug.py-02",
+      "file": "python/py_04_bug.py",
+      "language": "python",
+      "category": "BUG",
+      "severity": "MEDIUM",
+      "line": 12,
+      "description": "parse_age raises ValueError for non-numeric input"
+    },
+    {
+      "id": "py_05_bug.py-01",
+      "file": "python/py_05_bug.py",
+      "language": "python",
+      "category": "BUG",
+      "severity": "HIGH",
+      "line": 2,
+      "description": "discount percent is treated as a multiplier instead of a percentage"
+    },
+    {
+      "id": "py_06_security.py-01",
+      "file": "python/py_06_security.py",
+      "language": "python",
+      "category": "SECURITY",
+      "severity": "HIGH",
+      "line": 3,
+      "description": "hardcoded API key in source code"
+    },
+    {
+      "id": "py_06_security.py-02",
+      "file": "python/py_06_security.py",
+      "language": "python",
+      "category": "SECURITY",
+      "severity": "HIGH",
+      "line": 4,
+      "description": "hardcoded database password in source code"
+    },
+    {
+      "id": "py_07_security.py-01",
+      "file": "python/py_07_security.py",
+      "language": "python",
+      "category": "SECURITY",
+      "severity": "HIGH",
+      "line": 8,
+      "description": "hardcoded admin token used for authentication"
+    },
+    {
+      "id": "py_07_security.py-02",
+      "file": "python/py_07_security.py",
+      "language": "python",
+      "category": "SECURITY",
+      "severity": "MEDIUM",
+      "line": 14,
+      "description": "secret key is exposed through a debug endpoint"
+    },
+    {
+      "id": "py_08_performance.py-01",
+      "file": "python/py_08_performance.py",
+      "language": "python",
+      "category": "PERFORMANCE",
+      "severity": "MEDIUM",
+      "line": 3,
+      "description": "nested loop performs repeated linear search through orders"
+    },
+    {
+      "id": "py_08_performance.py-02",
+      "file": "python/py_08_performance.py",
+      "language": "python",
+      "category": "PERFORMANCE",
+      "severity": "MEDIUM",
+      "line": 13,
+      "description": "repeated string concatenation in a loop is inefficient"
+    },
+    {
+      "id": "py_09_performance.py-01",
+      "file": "python/py_09_performance.py",
+      "language": "python",
+      "category": "PERFORMANCE",
+      "severity": "MEDIUM",
+      "line": 5,
+      "description": "list membership checks create O(n^2) behavior"
+    },
+    {
+      "id": "py_09_performance.py-02",
+      "file": "python/py_09_performance.py",
+      "language": "python",
+      "category": "PERFORMANCE",
+      "severity": "MEDIUM",
+      "line": 12,
+      "description": "the list of names is rebuilt on every loop iteration"
+    },
+    {
+      "id": "py_10_style.py-01",
+      "file": "python/py_10_style.py",
+      "language": "python",
+      "category": "STYLE",
+      "severity": "LOW",
+      "line": 1,
+      "description": "function name uses non-standard PascalCase for a regular function"
+    },
+    {
+      "id": "py_10_style.py-02",
+      "file": "python/py_10_style.py",
+      "language": "python",
+      "category": "STYLE",
+      "severity": "LOW",
+      "line": 3,
+      "description": "manual index loop is unnecessarily verbose"
+    },
+    {
+      "id": "py_10_style.py-03",
+      "file": "python/py_10_style.py",
+      "language": "python",
+      "category": "STYLE",
+      "severity": "MEDIUM",
+      "line": 10,
+      "description": "bare except catches all exceptions"
+    },
+    {
+      "id": "py_11_style.py-01",
+      "file": "python/py_11_style.py",
+      "language": "python",
+      "category": "STYLE",
+      "severity": "LOW",
+      "line": 2,
+      "description": "os import is unused"
+    },
+    {
+      "id": "py_11_style.py-02",
+      "file": "python/py_11_style.py",
+      "language": "python",
+      "category": "STYLE",
+      "severity": "MEDIUM",
+      "line": 5,
+      "description": "file is opened without a context manager and may leak resources"
+    },
+    {
+      "id": "py_11_style.py-03",
+      "file": "python/py_11_style.py",
+      "language": "python",
+      "category": "STYLE",
+      "severity": "LOW",
+      "line": 9,
+      "description": "function definition violates common spacing conventions"
+    },
+    {
+      "id": "py_11_style.py-04",
+      "file": "python/py_11_style.py",
+      "language": "python",
+      "category": "STYLE",
+      "severity": "LOW",
+      "line": 12,
+      "description": "unused variable is defined"
+    },
+    {
+      "id": "py_12_mixed.py-01",
+      "file": "python/py_12_mixed.py",
+      "language": "python",
+      "category": "SECURITY",
+      "severity": "HIGH",
+      "line": 3,
+      "description": "hardcoded API token in source code"
+    },
+    {
+      "id": "py_12_mixed.py-02",
+      "file": "python/py_12_mixed.py",
+      "language": "python",
+      "category": "SECURITY",
+      "severity": "CRITICAL",
+      "line": 6,
+      "description": "SQL query is built by concatenating untrusted input"
+    },
+    {
+      "id": "py_12_mixed.py-03",
+      "file": "python/py_12_mixed.py",
+      "language": "python",
+      "category": "PERFORMANCE",
+      "severity": "LOW",
+      "line": 11,
+      "description": "rows are repeatedly appended via list addition"
+    },
+    {
+      "id": "py_12_mixed.py-04",
+      "file": "python/py_12_mixed.py",
+      "language": "python",
+      "category": "BUG",
+      "severity": "HIGH",
+      "line": 15,
+      "description": "average_score divides by zero when scores is empty"
+    },
+    {
+      "id": "py_13_mixed.py-01",
+      "file": "python/py_13_mixed.py",
+      "language": "python",
+      "category": "PERFORMANCE",
+      "severity": "LOW",
+      "line": 9,
+      "description": "repeated list concatenation is inefficient"
+    },
+    {
+      "id": "py_13_mixed.py-02",
+      "file": "python/py_13_mixed.py",
+      "language": "python",
+      "category": "SECURITY",
+      "severity": "HIGH",
+      "line": 14,
+      "description": "password is hardcoded and included in a URL"
+    },
+    {
+      "id": "py_13_mixed.py-03",
+      "file": "python/py_13_mixed.py",
+      "language": "python",
+      "category": "BUG",
+      "severity": "MEDIUM",
+      "line": 20,
+      "description": "next raises StopIteration when user_id is not found"
+    },
+    {
+      "id": "py_14_all.py-01",
+      "file": "python/py_14_all.py",
+      "language": "python",
+      "category": "SECURITY",
+      "severity": "HIGH",
+      "line": 1,
+      "description": "hardcoded password in source code"
+    },
+    {
+      "id": "py_14_all.py-02",
+      "file": "python/py_14_all.py",
+      "language": "python",
+      "category": "PERFORMANCE",
+      "severity": "MEDIUM",
+      "line": 5,
+      "description": "nested loops repeatedly scan users"
+    },
+    {
+      "id": "py_14_all.py-03",
+      "file": "python/py_14_all.py",
+      "language": "python",
+      "category": "BUG",
+      "severity": "HIGH",
+      "line": 11,
+      "description": "empty output causes an IndexError when output[0] is accessed"
+    },
+    {
+      "id": "py_14_all.py-04",
+      "file": "python/py_14_all.py",
+      "language": "python",
+      "category": "STYLE",
+      "severity": "MEDIUM",
+      "line": 16,
+      "description": "file is opened without a context manager"
+    },
+    {
+      "id": "py_14_all.py-05",
+      "file": "python/py_14_all.py",
+      "language": "python",
+      "category": "PERFORMANCE",
+      "severity": "MEDIUM",
+      "line": 19,
+      "description": "report is built with repeated string concatenation"
+    },
+    {
+      "id": "py_14_all.py-06",
+      "file": "python/py_14_all.py",
+      "language": "python",
+      "category": "SECURITY",
+      "severity": "CRITICAL",
+      "line": 23,
+      "description": "SQL query is built with string concatenation using untrusted input"
+    },
+    {
+      "id": "py_15_all.py-01",
+      "file": "python/py_15_all.py",
+      "language": "python",
+      "category": "SECURITY",
+      "severity": "HIGH",
+      "line": 3,
+      "description": "hardcoded API key in source code"
+    },
+    {
+      "id": "py_15_all.py-02",
+      "file": "python/py_15_all.py",
+      "language": "python",
+      "category": "PERFORMANCE",
+      "severity": "MEDIUM",
+      "line": 9,
+      "description": "repeated list concatenation can cause unnecessary copying"
+    },
+    {
+      "id": "py_15_all.py-03",
+      "file": "python/py_15_all.py",
+      "language": "python",
+      "category": "BUG",
+      "severity": "HIGH",
+      "line": 13,
+      "description": "average divides by zero when values is empty"
+    },
+    {
+      "id": "py_15_all.py-04",
+      "file": "python/py_15_all.py",
+      "language": "python",
+      "category": "SECURITY",
+      "severity": "HIGH",
+      "line": 16,
+      "description": "hardcoded admin password is used for authentication"
+    },
+    {
+      "id": "py_15_all.py-05",
+      "file": "python/py_15_all.py",
+      "language": "python",
+      "category": "STYLE",
+      "severity": "MEDIUM",
+      "line": 23,
+      "description": "bare except catches all exceptions"
+    },
+    {
+      "id": "js_04_bug.js-01",
+      "file": "javascript/js_04_bug.js",
+      "language": "javascript",
+      "category": "BUG",
+      "severity": "HIGH",
+      "line": 7,
+      "description": "strict equality compares numeric user.id with a string id"
+    },
+    {
+      "id": "js_04_bug.js-02",
+      "file": "javascript/js_04_bug.js",
+      "language": "javascript",
+      "category": "BUG",
+      "severity": "HIGH",
+      "line": 8,
+      "description": "user.name is accessed without checking whether user exists"
+    },
+    {
+      "id": "js_05_bug.js-01",
+      "file": "javascript/js_05_bug.js",
+      "language": "javascript",
+      "category": "BUG",
+      "severity": "HIGH",
+      "line": 6,
+      "description": "division by zero is possible when numbers is empty"
+    },
+    {
+      "id": "js_05_bug.js-02",
+      "file": "javascript/js_05_bug.js",
+      "language": "javascript",
+      "category": "BUG",
+      "severity": "HIGH",
+      "line": 10,
+      "description": "items[0] can be undefined for an empty array"
+    },
+    {
+      "id": "js_06_security.js-01",
+      "file": "javascript/js_06_security.js",
+      "language": "javascript",
+      "category": "SECURITY",
+      "severity": "HIGH",
+      "line": 4,
+      "description": "hardcoded API key in source code"
+    },
+    {
+      "id": "js_06_security.js-02",
+      "file": "javascript/js_06_security.js",
+      "language": "javascript",
+      "category": "SECURITY",
+      "severity": "HIGH",
+      "line": 5,
+      "description": "hardcoded database password in source code"
+    },
+    {
+      "id": "js_06_security.js-03",
+      "file": "javascript/js_06_security.js",
+      "language": "javascript",
+      "category": "SECURITY",
+      "severity": "CRITICAL",
+      "line": 9,
+      "description": "secret values are exposed through an API response"
+    },
+    {
+      "id": "js_07_security.js-01",
+      "file": "javascript/js_07_security.js",
+      "language": "javascript",
+      "category": "SECURITY",
+      "severity": "HIGH",
+      "line": 4,
+      "description": "DELETE endpoint has no visible authentication or authorization check"
+    },
+    {
+      "id": "js_08_performance.js-01",
+      "file": "javascript/js_08_performance.js",
+      "language": "javascript",
+      "category": "PERFORMANCE",
+      "severity": "MEDIUM",
+      "line": 4,
+      "description": "nested loops create O(n*m) lookup behavior"
+    },
+    {
+      "id": "js_08_performance.js-02",
+      "file": "javascript/js_08_performance.js",
+      "language": "javascript",
+      "category": "PERFORMANCE",
+      "severity": "MEDIUM",
+      "line": 18,
+      "description": "repeated string concatenation is inefficient for large output"
+    },
+    {
+      "id": "ts_09_performance.ts-01",
+      "file": "javascript/ts_09_performance.ts",
+      "language": "typescript",
+      "category": "PERFORMANCE",
+      "severity": "MEDIUM",
+      "line": 5,
+      "description": "Array.includes inside a loop creates O(n^2) uniqueness checking"
+    },
+    {
+      "id": "ts_09_performance.ts-02",
+      "file": "javascript/ts_09_performance.ts",
+      "language": "typescript",
+      "category": "PERFORMANCE",
+      "severity": "MEDIUM",
+      "line": 14,
+      "description": "Array.find is executed for every requested id"
+    },
+    {
+      "id": "js_10_style.js-01",
+      "file": "javascript/js_10_style.js",
+      "language": "javascript",
+      "category": "STYLE",
+      "severity": "LOW",
+      "line": 2,
+      "description": "var should generally be replaced with block-scoped let or const"
+    },
+    {
+      "id": "js_10_style.js-02",
+      "file": "javascript/js_10_style.js",
+      "language": "javascript",
+      "category": "STYLE",
+      "severity": "LOW",
+      "line": 3,
+      "description": "manual index loop is unnecessarily verbose"
+    },
+    {
+      "id": "js_10_style.js-03",
+      "file": "javascript/js_10_style.js",
+      "language": "javascript",
+      "category": "STYLE",
+      "severity": "MEDIUM",
+      "line": 10,
+      "description": "try/catch is used for simple property access and suppresses errors"
+    },
+    {
+      "id": "ts_11_style.ts-01",
+      "file": "javascript/ts_11_style.ts",
+      "language": "typescript",
+      "category": "STYLE",
+      "severity": "MEDIUM",
+      "line": 1,
+      "description": "interface name should follow common PascalCase convention"
+    },
+    {
+      "id": "ts_11_style.ts-02",
+      "file": "javascript/ts_11_style.ts",
+      "language": "typescript",
+      "category": "STYLE",
+      "severity": "LOW",
+      "line": 2,
+      "description": "property names use inconsistent capitalization"
+    },
+    {
+      "id": "ts_11_style.ts-03",
+      "file": "javascript/ts_11_style.ts",
+      "language": "typescript",
+      "category": "STYLE",
+      "severity": "LOW",
+      "line": 6,
+      "description": "function name uses non-standard PascalCase for a regular function"
+    },
+    {
+      "id": "ts_11_style.ts-04",
+      "file": "javascript/ts_11_style.ts",
+      "language": "typescript",
+      "category": "STYLE",
+      "severity": "LOW",
+      "line": 7,
+      "description": "unused local variable is defined"
+    },
+    {
+      "id": "js_12_mixed.js-01",
+      "file": "javascript/js_12_mixed.js",
+      "language": "javascript",
+      "category": "SECURITY",
+      "severity": "HIGH",
+      "line": 3,
+      "description": "hardcoded API token in source code"
+    },
+    {
+      "id": "js_12_mixed.js-02",
+      "file": "javascript/js_12_mixed.js",
+      "language": "javascript",
+      "category": "SECURITY",
+      "severity": "CRITICAL",
+      "line": 6,
+      "description": "SQL query is built with untrusted string concatenation"
+    },
+    {
+      "id": "js_12_mixed.js-03",
+      "file": "javascript/js_12_mixed.js",
+      "language": "javascript",
+      "category": "BUG",
+      "severity": "HIGH",
+      "line": 11,
+      "description": "averageScores divides by zero when scores is empty"
+    },
+    {
+      "id": "js_12_mixed.js-04",
+      "file": "javascript/js_12_mixed.js",
+      "language": "javascript",
+      "category": "PERFORMANCE",
+      "severity": "LOW",
+      "line": 17,
+      "description": "repeated concat creates unnecessary intermediate arrays"
+    },
+    {
+      "id": "ts_13_mixed.ts-01",
+      "file": "javascript/ts_13_mixed.ts",
+      "language": "typescript",
+      "category": "SECURITY",
+      "severity": "HIGH",
+      "line": 6,
+      "description": "hardcoded API key in source code"
+    },
+    {
+      "id": "ts_13_mixed.ts-02",
+      "file": "javascript/ts_13_mixed.ts",
+      "language": "typescript",
+      "category": "PERFORMANCE",
+      "severity": "MEDIUM",
+      "line": 12,
+      "description": "find is executed inside a loop for every requested id"
+    },
+    {
+      "id": "ts_13_mixed.ts-03",
+      "file": "javascript/ts_13_mixed.ts",
+      "language": "typescript",
+      "category": "STYLE",
+      "severity": "LOW",
+      "line": 20,
+      "description": "unused variable is defined"
+    },
+    {
+      "id": "ts_13_mixed.ts-04",
+      "file": "javascript/ts_13_mixed.ts",
+      "language": "typescript",
+      "category": "BUG",
+      "severity": "HIGH",
+      "line": 21,
+      "description": "User has property name but code accesses non-existent Name property"
+    },
+    {
+      "id": "js_14_all.js-01",
+      "file": "javascript/js_14_all.js",
+      "language": "javascript",
+      "category": "SECURITY",
+      "severity": "HIGH",
+      "line": 1,
+      "description": "hardcoded admin password in source code"
+    },
+    {
+      "id": "js_14_all.js-02",
+      "file": "javascript/js_14_all.js",
+      "language": "javascript",
+      "category": "PERFORMANCE",
+      "severity": "MEDIUM",
+      "line": 6,
+      "description": "nested loops repeatedly scan users"
+    },
+    {
+      "id": "js_14_all.js-03",
+      "file": "javascript/js_14_all.js",
+      "language": "javascript",
+      "category": "BUG",
+      "severity": "HIGH",
+      "line": 15,
+      "description": "empty result causes property access on undefined"
+    },
+    {
+      "id": "js_14_all.js-04",
+      "file": "javascript/js_14_all.js",
+      "language": "javascript",
+      "category": "STYLE",
+      "severity": "MEDIUM",
+      "line": 4,
+      "description": "var should generally be replaced with block-scoped let or const"
+    },
+    {
+      "id": "js_14_all.js-05",
+      "file": "javascript/js_14_all.js",
+      "language": "javascript",
+      "category": "PERFORMANCE",
+      "severity": "MEDIUM",
+      "line": 24,
+      "description": "repeated string concatenation in a loop is inefficient"
+    },
+    {
+      "id": "js_14_all.js-06",
+      "file": "javascript/js_14_all.js",
+      "language": "javascript",
+      "category": "SECURITY",
+      "severity": "CRITICAL",
+      "line": 31,
+      "description": "SQL query is built with untrusted string concatenation"
+    },
+    {
+      "id": "ts_15_all.ts-01",
+      "file": "javascript/ts_15_all.ts",
+      "language": "typescript",
+      "category": "SECURITY",
+      "severity": "HIGH",
+      "line": 3,
+      "description": "hardcoded API key in source code"
+    },
+    {
+      "id": "ts_15_all.ts-02",
+      "file": "javascript/ts_15_all.ts",
+      "language": "typescript",
+      "category": "PERFORMANCE",
+      "severity": "MEDIUM",
+      "line": 11,
+      "description": "repeated array concatenation can copy accumulated data"
+    },
+    {
+      "id": "ts_15_all.ts-03",
+      "file": "javascript/ts_15_all.ts",
+      "language": "typescript",
+      "category": "BUG",
+      "severity": "HIGH",
+      "line": 18,
+      "description": "average divides by zero when values is empty"
+    },
+    {
+      "id": "ts_15_all.ts-04",
+      "file": "javascript/ts_15_all.ts",
+      "language": "typescript",
+      "category": "SECURITY",
+      "severity": "HIGH",
+      "line": 22,
+      "description": "hardcoded admin password is used for authentication"
+    },
+    {
+      "id": "ts_15_all.ts-05",
+      "file": "javascript/ts_15_all.ts",
+      "language": "typescript",
+      "category": "STYLE",
+      "severity": "MEDIUM",
+      "line": 29,
+      "description": "try/catch is used for simple property access and suppresses errors"
+    }
+  ]
+}
