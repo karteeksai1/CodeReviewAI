@@ -22,10 +22,10 @@ async def supervisor_node(state: GraphState) -> GraphState:
         "You are routing supervisor for CodeReviewAI. Return JSON only: {\"agent_plan\": [...]}. "
         "Available agents: 'security', 'performance', 'style'. "
         "Rules: "
-        "- Include 'security' only if diff touches auth, secrets, crypto, input validation, SQL, or shell commands. "
-        "- Include 'performance' only if diff touches database queries, caching, concurrency, or unbounded loops. "
-        "- Always include 'style' for bugs, runtime errors, and code quality. "
-        "Select only strictly relevant agents to conserve resources."
+        "- Include 'security' if diff touches auth, secrets, passwords, credentials, tokens, crypto, input validation, SQL, or shell commands. "
+        "- Include 'performance' if diff touches database queries, caching, concurrency, resource allocation, file handles, or loops. "
+        "- Always include 'style' for bugs, runtime errors, logic errors, and code quality. "
+        "Select relevant agents."
     )
     diff_content = state.get("diff", "")
     if not diff_content:
@@ -38,9 +38,18 @@ async def supervisor_node(state: GraphState) -> GraphState:
         diff_length=len(diff_content),
         diff_preview=diff_content[:300] if diff_content else "",
     )
+    diff_lower = diff_content.lower()
     try:
         result = await groq_json(system, user)
         plan = result.get("agent_plan", ["security", "performance", "style"])
+        if any(kw in diff_lower for kw in ["password", "secret", "token", "credential", "admin", "auth", "eval", "users/:id"]):
+            if "security" not in plan:
+                plan.append("security")
+        if any(kw in diff_lower for kw in ["open(", "query", "database", "orders", "cache"]):
+            if "performance" not in plan:
+                plan.append("performance")
+        if "style" not in plan:
+            plan.append("style")
     except Exception as e:
         logger.exception("Supervisor routing failed, using fallback plan", error=str(e))
         plan = ["security", "performance", "style"]

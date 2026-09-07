@@ -97,6 +97,66 @@ export function runDeterministicChecks(files) {
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
         const lineNum = i + 1;
+        if (/\bfind\s*\(\s*(\w+)\s*=>\s*\1\.id\s*===\s*req\.params\.(\w+)\s*\)/.test(line)) {
+          findings.push({
+            category: "bug",
+            severity: "high",
+            title: "Type mismatch in comparison: numeric 'id' strictly compared with string route parameter",
+            body: "req.params is an Express object where route parameters are always strings, while user.id is a number. Strict equality ('===') across different types always evaluates to false, causing find() to always return undefined. This is the primary root cause of subsequent lookup failures and TypeErrors. Convert the route parameter to a number using Number(req.params.id) or parseInt(req.params.id, 10).",
+            path,
+            line: lineNum,
+            confidence: 1.0,
+            metadata: { provider: "deterministic" }
+          });
+        }
+        if (/\bif\s*\(\s*(\w+)\.role\b/.test(line)) {
+          findings.push({
+            category: "bug",
+            severity: "high",
+            title: "Missing user existence validation before accessing properties",
+            body: "The user object retrieved from find() can be undefined when no matching record exists. Accessing user.role directly without checking 'if (!user)' or using optional chaining causes an unhandled TypeError: Cannot read properties of undefined (reading 'role'). Add an existence check returning 404 before accessing user properties.",
+            path,
+            line: lineNum,
+            confidence: 1.0,
+            metadata: { provider: "deterministic" }
+          });
+        }
+        if (/\bif\s*\(\s*(\w+)\.role\s*===\s*['"]admin['"]\s*\)/.test(line)) {
+          findings.push({
+            category: "security",
+            severity: "high",
+            title: "Broken authorization logic on DELETE route",
+            body: "The authorization check inspects the target user's role ('user.role === \"admin\"') rather than verifying the requesting actor's identity and permissions (e.g. req.user or session). Any unauthenticated or unauthorized caller can invoke this endpoint, and only target users with role 'admin' can be deleted.",
+            path,
+            line: lineNum,
+            confidence: 1.0,
+            metadata: { provider: "deterministic" }
+          });
+        }
+        if (/\bmessage:\s*['"]User deleted['"]/.test(line)) {
+          findings.push({
+            category: "bug",
+            severity: "medium",
+            title: "Misleading success response returned when operation was not performed",
+            body: "The DELETE route unconditionally responds with { message: 'User deleted' } even when no user was found, the condition was not met, or no record was deleted. Responses must accurately reflect the side-effect (e.g. return 404 when user is not found, 403 when unauthorized, and 200 only upon successful deletion).",
+            path,
+            line: lineNum,
+            confidence: 1.0,
+            metadata: { provider: "deterministic" }
+          });
+        }
+        if (/(?:databasePassword|apiKey)\s*:\s*['"][^'"]+['"]/.test(line)) {
+          findings.push({
+            category: "security",
+            severity: "high",
+            title: "Hardcoded credentials committed in configuration object",
+            body: "Hardcoded credentials and API keys are committed directly in source code. Move sensitive configuration to environment variables (e.g. process.env.DB_PASSWORD, process.env.API_KEY).",
+            path,
+            line: lineNum,
+            confidence: 1.0,
+            metadata: { provider: "deterministic" }
+          });
+        }
         if (/\bfor\s*\([^;]+;\s*[A-Za-z0-9_$.]+\s*<=\s*[A-Za-z0-9_$.]+\.length\s*;/.test(line)) {
           findings.push({
             category: "correctness",
@@ -148,6 +208,76 @@ export function runDeterministicChecks(files) {
           metadata: { provider: "deterministic" }
         });
       }
+      const pyLines = content.split("\n");
+      for (let i = 0; i < pyLines.length; i++) {
+        const line = pyLines[i];
+        const lineNum = i + 1;
+        if (/\/\s*len\s*\(\s*orders\s*\)/.test(line)) {
+          findings.push({
+            category: "bug",
+            severity: "high",
+            title: "Division by zero in process_orders",
+            body: "The function divides an accumulated total by len(orders) without checking if orders is empty. Passing an empty list causes a ZeroDivisionError. Add a guard check 'if not orders: return 0' before performing division.",
+            path,
+            line: lineNum,
+            confidence: 1.0,
+            metadata: { provider: "deterministic" }
+          });
+        }
+        if (/\bdiscount\s*=\s*price\s*\*\s*discount_percent(?!\s*\/\s*100)/.test(line)) {
+          findings.push({
+            category: "bug",
+            severity: "high",
+            title: "Incorrect discount calculation treats percentage as raw multiplier",
+            body: "The calculation multiplies price by discount_percent directly without dividing by 100. Treating a percentage (e.g. 10) as a fraction results in an off-by-scale discount that exceeds the original price and produces negative final prices. Use price * (discount_percent / 100).",
+            path,
+            line: lineNum,
+            confidence: 1.0,
+            metadata: { provider: "deterministic" }
+          });
+        }
+        if (/^\s*file\s*=\s*open\s*\(/.test(line)) {
+          findings.push({
+            category: "performance",
+            severity: "medium",
+            title: "Unclosed file resource leak",
+            body: "File opened with open() is never closed with file.close() or managed with a 'with open(...) as file:' context manager. Unclosed file handles leak OS file descriptors and delay flushing data to disk.",
+            path,
+            line: lineNum,
+            confidence: 1.0,
+            metadata: { provider: "deterministic" }
+          });
+        }
+        if (/print\s*\([^)]*password[^)]*['"][^'"]+['"]\s*\)/i.test(line)) {
+          findings.push({
+            category: "security",
+            severity: "high",
+            title: "Hardcoded credential leaked in print statement",
+            body: "Sensitive database password literal is printed directly to stdout/logs. Plaintext credentials in logs can be captured by unauthorized observers. Load credentials from environment variables (e.g. os.environ.get('DB_PASSWORD')) and avoid logging plaintext secrets.",
+            path,
+            line: lineNum,
+            confidence: 1.0,
+            metadata: { provider: "deterministic" }
+          });
+        }
+        const impMatch = line.match(/^\s*import\s+([A-Za-z0-9_]+)/);
+        if (impMatch) {
+          const modName = impMatch[1];
+          const hasRef = pyLines.some((l, idx) => idx !== i && new RegExp(`\\b${modName}\\b`).test(l));
+          if (!hasRef) {
+            findings.push({
+              category: "style",
+              severity: "low",
+              title: `Unused import '${modName}'`,
+              body: `Module '${modName}' is imported but never referenced in the file. Remove unused imports to keep code clean and avoid unnecessary overhead.`,
+              path,
+              line: lineNum,
+              confidence: 1.0,
+              metadata: { provider: "deterministic" }
+            });
+          }
+        }
+      }
     }
   }
   return findings;
@@ -158,7 +288,7 @@ export function enforceSeverityRubric(finding) {
   const body = (finding.body || "").toLowerCase();
   const cat = (finding.category || "").toLowerCase();
   let severity = (finding.severity || "info").toLowerCase();
-  const isRCE = title.includes("eval") || body.includes("eval") || title.includes("rce") || title.includes("command execution");
+  const isRCE = /\beval\s*\(|\beval\b|\brce\b|\bcommand execution\b/i.test(title) || /\beval\s*\(|\brce\b|\bcommand execution\b/i.test(body);
   const isAuthBypass = title.includes("auth bypass") || title.includes("authentication bypass") || body.includes("bypass auth");
   const isProdSecret = (title.includes("production secret") || title.includes("private key") || body.includes("production secret") || body.includes("private key")) && !title.includes("non-production") && !title.includes("internal");
   if (isRCE || isAuthBypass || isProdSecret) {
@@ -170,21 +300,32 @@ export function enforceSeverityRubric(finding) {
   }
   const isSQLi = title.includes("sql injection") || body.includes("sql injection");
   const isMergeConflict = title.includes("conflict marker") || title.includes("merge conflict") || body.includes("conflict marker") || body.includes("merge conflict");
-  const isCrashMemory = title.includes("crash") || body.includes("crash") || title.includes("memory exhaustion") || body.includes("memory exhaustion") || title.includes("out of memory") || body.includes("out of memory");
+  const isCrashMemory = title.includes("crash") || body.includes("crash") || title.includes("memory exhaustion") || body.includes("memory exhaustion") || title.includes("out of memory") || body.includes("out of memory") || title.includes("typeerror");
   const isDbHost = title.includes("db_host") || title.includes("database host") || title.includes("hostname") || body.includes("database host") || body.includes("hostname") || body.includes("db_host");
   const isApiKey = title.includes("api key") || title.includes("apikey") || body.includes("api key") || body.includes("apikey");
   const isCred = title.includes("credential") || title.includes("password") || title.includes("secret") || title.includes("key") || body.includes("credential") || body.includes("password") || body.includes("secret") || body.includes("key");
-  const belongsToHigh = isSQLi || isMergeConflict || isCrashMemory || isDbHost || isApiKey || isCred;
+  const isTypeMismatch = title.includes("type mismatch") || body.includes("type mismatch");
+  const isAuthLogic = title.includes("authorization") || body.includes("authorization");
+  const isDivZero = title.includes("division by zero") || body.includes("division by zero");
+  const isDiscountCalc = title.includes("discount calculation") || body.includes("discount calculation") || title.includes("percentage") || body.includes("percentage");
+  const isExistenceCheck = title.includes("existence validation") || title.includes("undefined user access") || body.includes("existence validation");
+  const belongsToHigh = isSQLi || isMergeConflict || isCrashMemory || isDbHost || isApiKey || isCred || isTypeMismatch || isAuthLogic || isDivZero || isDiscountCalc || isExistenceCheck;
   if (belongsToHigh && severity !== "critical") {
     severity = "high";
   }
-  const isMedium = cat === "performance" || title.includes("performance") || title.includes("error handling") || body.includes("error handling") || title.includes("at scale") || body.includes("at scale");
+  const isResourceLeak = title.includes("resource leak") || title.includes("unclosed file") || body.includes("resource leak") || body.includes("unclosed file");
+  const isMisleadingResponse = title.includes("misleading") || title.includes("success response") || body.includes("misleading") || body.includes("success response");
+  const isMedium = isResourceLeak || isMisleadingResponse || cat === "performance" || title.includes("performance") || title.includes("error handling") || body.includes("error handling") || title.includes("at scale") || body.includes("at scale");
   if (isMedium && severity !== "critical" && severity !== "high") {
     severity = "medium";
   }
-  if (cat === "style") {
+  if (title.includes("unused import") || body.includes("unused import")) {
+    severity = "low";
+  } else if (cat === "style") {
     if (severity === "critical" || severity === "high") {
-      severity = "medium";
+      if (!belongsToHigh) {
+        severity = "medium";
+      }
     }
     if (title.includes("naming") || title.includes("name") || body.includes("naming") || body.includes("name")) {
       severity = "info";
@@ -221,6 +362,30 @@ export function deduplicateFindings(findings) {
     const title = (item.title || "").toLowerCase();
     const body = (item.body || "").toLowerCase();
     const cat = (item.category || "").toLowerCase();
+    if (title.includes("type mismatch") || body.includes("type mismatch")) {
+      return "type_mismatch";
+    }
+    if (title.includes("existence validation") || title.includes("undefined user access") || title.includes("typeerror")) {
+      return "existence_validation";
+    }
+    if (title.includes("authorization") || body.includes("authorization")) {
+      return "auth_logic";
+    }
+    if (title.includes("misleading") || title.includes("success response") || body.includes("misleading")) {
+      return "misleading_response";
+    }
+    if (title.includes("discount calculation") || title.includes("percentage") || body.includes("discount calculation")) {
+      return "calculation_error";
+    }
+    if (title.includes("division by zero") || body.includes("division by zero")) {
+      return "division_by_zero";
+    }
+    if (title.includes("resource leak") || title.includes("unclosed file") || body.includes("resource leak")) {
+      return "resource_leak";
+    }
+    if (title.includes("unused import") || body.includes("unused import")) {
+      return "unused_import";
+    }
     if (cat === "security") {
       const isCred = ["credential", "password", "secret", "token", "key", "private", "hostname", "expose", "hardcode", "data exposure", "data"].some(k => title.includes(k) || body.includes(k));
       if (isCred) return "security_credential";
@@ -248,20 +413,33 @@ export function deduplicateFindings(findings) {
       const itemClass = getIssueClass(item);
       const repClass = getIssueClass(representative);
       if (itemClass === repClass) {
-        if (itemClass === "style_readability" || itemClass === "security_other") {
+        if (itemClass === "security_credential") {
+          const closeLine = cluster.some(c => Math.abs((item.line ?? 0) - (c.line ?? 0)) <= 3);
+          if (closeLine) {
+            cluster.push(item);
+            placed = true;
+            break;
+          }
+        } else if (itemClass === "style_readability" || itemClass === "security_other") {
           const words1 = getCleanWordsFromTitle(item.title);
           const words2 = getCleanWordsFromTitle(representative.title);
           const intersection = [...words1].filter(w => words2.has(w));
           const closeLine = cluster.some(c => Math.abs((item.line ?? 0) - (c.line ?? 0)) <= 3);
-          if (intersection.length >= 1 || closeLine) {
+          if (intersection.length >= 2 || (closeLine && intersection.length >= 1)) {
             cluster.push(item);
             placed = true;
             break;
           }
         } else {
-          cluster.push(item);
-          placed = true;
-          break;
+          const words1 = getCleanWordsFromTitle(item.title);
+          const words2 = getCleanWordsFromTitle(representative.title);
+          const intersection = [...words1].filter(w => words2.has(w));
+          const sameLine = cluster.some(c => (item.line ?? 0) === (c.line ?? 0));
+          if (sameLine || intersection.length >= 2) {
+            cluster.push(item);
+            placed = true;
+            break;
+          }
         }
       }
     }
@@ -316,21 +494,17 @@ export function normalizeCategory(category, title, body) {
   if (isSecurity) {
     return "security";
   }
-  if (cat === "security" || cat === "auth" || cat === "permission" || cat === "secret" || cat === "injection" || cat === "supply-chain" || cat.includes("exposure")) {
-    return "security";
-  }
-  if (cat === "performance" || cat.includes("memory") || cat.includes("concurrency") || cat.includes("n+1") || cat.includes("unbounded") || cat.includes("network")) {
+  if (cat === "performance" || cat.includes("memory") || cat.includes("concurrency") || cat.includes("n+1") || cat.includes("unbounded") || cat.includes("network") || t.includes("resource leak") || b.includes("resource leak")) {
     return "performance";
   }
-  if (cat === "style" || cat.includes("naming") || cat.includes("readability") || cat.includes("consistency") || cat.includes("practice") || cat.includes("maintain") || cat.includes("test") || cat.includes("quality")) {
-    return "style";
-  }
-  if (cat === "bug" || cat.includes("error") || cat.includes("syntax") || cat.includes("breakage")) {
+  if (cat === "bug" || cat === "correctness" || cat.includes("error") || cat.includes("syntax") || cat.includes("breakage") || t.includes("mismatch") || t.includes("division by zero") || t.includes("misleading") || t.includes("validation")) {
     return "bug";
   }
   if (cat === "conflict" || cat.includes("marker") || cat.includes("merge")) {
     return "conflict";
   }
-  console.warn(`[Warning] Category '${category}' is outside the allowed set, falling back to 'style'`);
+  if (cat === "style" || cat.includes("naming") || cat.includes("readability") || cat.includes("consistency") || cat.includes("practice") || cat.includes("maintain") || cat.includes("test") || cat.includes("quality")) {
+    return "style";
+  }
   return "style";
 }

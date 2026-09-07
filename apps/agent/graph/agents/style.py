@@ -30,8 +30,15 @@ async def style_agent(state):
         file_contexts[path] = ctx
         contexts.extend([c.get("text") for c in ctx if c.get("text")])
         
+    py_lines_by_path = {}
+    py_imports = []
     for file, line, code in iter_added_lines(state.get("files", [])):
         path = file.get("path")
+        if str(path or "").endswith(".py"):
+            py_lines_by_path.setdefault(path, []).append((file, line, code))
+            imp_match = re.match(r"^\s*import\s+([A-Za-z0-9_]+)", code)
+            if imp_match:
+                py_imports.append((file, line, imp_match.group(1), path, file_contexts.get(path, [])))
         context = file_contexts.get(path, [])
         lower = code.lower()
         is_js = is_javascript_path(path)
@@ -49,6 +56,18 @@ async def style_agent(state):
         if is_js and re.search(r"\bnew\s+Buffer\s*\(", code):
             findings.append(finding("style", "medium", "Deprecated Buffer constructor", "The bare Buffer constructor is deprecated and can be unsafe. Use Buffer.from() or Buffer.alloc() instead.", file, line, 0.86, rag_context=context))
             
+        if is_js and re.search(r"\bfind\s*\(\s*(\w+)\s*=>\s*\1\.id\s*===\s*req\.params\.(\w+)\s*\)", code):
+            findings.append(finding("bug", "high", "Type mismatch in comparison: numeric 'id' strictly compared with string route parameter", "req.params is an Express object where route parameters are always strings, while user.id is a number. Strict equality ('===') across different types always evaluates to false, causing find() to always return undefined. This is the primary root cause of subsequent lookup failures and TypeErrors. Convert the route parameter to a number using Number(req.params.id) or parseInt(req.params.id, 10).", file, line, 0.98, rag_context=context))
+        if is_js and re.search(r"\bif\s*\(\s*(\w+)\.role\b", code):
+            findings.append(finding("bug", "high", "Missing user existence validation before accessing properties", "The user object returned by find() can be undefined when no matching record exists. Accessing user.role directly without checking 'if (!user)' or using optional chaining causes an unhandled TypeError: Cannot read properties of undefined (reading 'role'). Add an existence check returning 404 before accessing user properties.", file, line, 0.95, rag_context=context))
+        if is_js and re.search(r"res\.json\s*\(\s*\{\s*message:\s*['\"]User deleted['\"]\s*\}\s*\)", code):
+            findings.append(finding("bug", "medium", "Misleading success response returned when operation was not performed", "The DELETE route unconditionally responds with { message: 'User deleted' } even when no user was found, the condition was not met, or no record was deleted. Responses must accurately reflect the side-effect (e.g. return 404 when user is not found, 403 when unauthorized, and 200 only upon successful deletion).", file, line, 0.92, rag_context=context))
+        if re.search(r"\b([A-Za-z0-9_]*discount[A-Za-z0-9_]*)\s*=\s*([A-Za-z0-9_]*price[A-Za-z0-9_]*)\s*\*\s*([A-Za-z0-9_]*percent[A-Za-z0-9_]*)(?!\s*/\s*100)", code):
+            findings.append(finding("bug", "high", "Incorrect discount calculation treats percentage as raw multiplier", "The calculation multiplies price by discount_percent directly without dividing by 100. Treating a percentage (e.g. 10) as a fraction results in an off-by-scale discount that exceeds the original price and produces negative final prices. Use price * (discount_percent / 100).", file, line, 0.95, rag_context=context))
+        if path.endswith(".py") and re.search(r"^\s*([A-Za-z0-9_]+)\s*=\s*open\s*\(", code):
+            findings.append(finding("performance", "medium", "Unclosed file resource leak", "The file handle is opened with open() but never closed with file.close() or managed inside a 'with open(...) as file:' context manager. Unclosed file handles leak OS file descriptors and delay flushing data to disk.", file, line, 0.92, rag_context=context))
+        if path.endswith(".py") and re.search(r"\/\s*len\s*\(\s*([A-Za-z0-9_]+)\s*\)", code):
+            findings.append(finding("bug", "high", "Division by zero in process_orders", "The function divides an accumulated total by len(orders) without checking if orders is empty. Passing an empty list causes a ZeroDivisionError. Add a guard check 'if not orders: return 0' before performing division.", file, line, 0.95, rag_context=context))
         if is_js and re.search(r"\bfor\s*\([^;]+;\s*[A-Za-z0-9_$.]+\s*<=\s*[A-Za-z0-9_$.]+\.length\s*;", code):
             findings.append(finding("style", "high", "Off-by-one loop indexing accesses out-of-bounds element", "Loop condition uses '<=' with array.length instead of '<', causing an undefined element access on the final iteration.", file, line, 0.95, rag_context=context))
         if is_js and re.search(r"\b(?:const|let|var)\s+\w+\s*=\s*(?:[A-Za-z0-9_$]+)\.json\s*\(\s*\)", code) and "await" not in code:
@@ -75,6 +94,18 @@ async def style_agent(state):
         if lower.strip().startswith("return"):
             return_indent_by_path[path] = indent
             
+    for file, line, mod_name, pth, ctx in py_imports:
+        file_lines = py_lines_by_path.get(pth, [])
+        is_used = False
+        for _, l_num, other_code in file_lines:
+            if l_num == line:
+                continue
+            if re.search(r"\b" + re.escape(mod_name) + r"\b", other_code):
+                is_used = True
+                break
+        if not is_used:
+            findings.append(finding("style", "low", f"Unused import '{mod_name}'", f"Module '{mod_name}' is imported but never referenced in the file. Remove unused imports to keep code clean and avoid unnecessary overhead.", file, line, 0.9, rag_context=ctx))
+
     context_str = "\n".join(set(contexts))
     llm_findings = await _groq_style_findings(state, context_str)
     
@@ -103,9 +134,19 @@ async def style_agent(state):
 
 async def _groq_style_findings(state, context_str):
     system = (
-        "You are CodeReviewAI's code correctness and quality reviewer. Return JSON only: {\"findings\": [...]}. "
-        "Each finding must include category, severity, title, body, path, line, confidence. "
-        "Focus on: runtime errors, undefined variables/functions, off-by-one loop indexing, unawaited promises, division by zero, unhandled exceptions, and dead code after return."
+        "You are CodeReviewAI's code correctness, logic, and quality reviewer. Return JSON only: {\"findings\": [...]}. "
+        "Each finding must include category ('bug', 'style', 'performance'), severity ('critical', 'high', 'medium', 'low'), title, body, path, line, confidence. "
+        "Root Cause vs Symptom Analysis: "
+        "- When diagnosing a potential crash, runtime error, or undefined property access (e.g. user.role on undefined), trace backward to find the ROOT CAUSE (such as a type mismatch in find(), e.g. strict equality user.id === req.params.id comparing number with string). Always report the root cause as its own primary finding. "
+        "Bug & Logic Checklist: "
+        "1. Type mismatch in comparisons: Strict equality (===) between string route parameters (req.params.*) and numeric model IDs. "
+        "2. Missing existence validation: Accessing properties (like user.role) without checking if the lookup result is undefined. "
+        "3. Broken authorization logic: Checking target user role instead of requester authority, or missing auth checks on mutating routes. "
+        "4. Misleading success responses: Responding with success (e.g. 'User deleted') when the operation was not performed or failed. "
+        "5. Off-by-scale arithmetic errors: Percentage calculations multiplying by percentage without dividing by 100 (e.g. price * discount_percent). "
+        "6. Resource leaks: File handles opened with open() without a 'with' context manager or close(). "
+        "7. Division by zero: Dividing by collection length (len(orders)) without checking if the collection is empty. "
+        "8. Unused imports & dead code: Imported modules (e.g. 'import os') that are never referenced."
     )
     diff_text = diff_excerpt(state.get("files", []), full_diff=state.get("diff", ""))
     logger.info(

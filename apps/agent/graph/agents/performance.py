@@ -46,6 +46,8 @@ async def performance_agent(state):
         if loop_indent is not None and ("await " in lower or ".query(" in lower or ".find(" in lower):
             if not re.search(r"\b(for|while)\b", lower):
                 findings.append(finding("performance", "medium", "Possible N+1 work inside a loop", "Batch, preload, or move async/database work outside the loop.", file, line, 0.78, rag_context=context))
+        if (str(path or "").endswith(".py") or str(path or "").endswith((".js", ".ts"))) and re.search(r"^\s*([A-Za-z0-9_]+)\s*=\s*open\s*\(", code):
+            findings.append(finding("performance", "medium", "Unclosed file resource leak", "The file handle is opened with open() but never closed with file.close() or managed inside a 'with open(...) as file:' context manager. Unclosed file handles leak OS file descriptors and delay flushing data to disk.", file, line, 0.92, rag_context=context))
         if "select *" in lower:
             findings.append(finding("performance", "low", "Unbounded column selection", "Prefer explicit columns for hot paths.", file, line, 0.66, rag_context=context))
             
@@ -144,9 +146,9 @@ async def performance_agent(state):
 async def _groq_performance_findings(state, context_str):
     system = (
         "You are CodeReviewAI's performance reviewer. Return JSON only: {\"findings\": [...]}. "
-        "Each finding must include category, severity, title, body, path, line, confidence. "
-        "Focus on: N+1 database queries, unbounded external API calls, unindexed large queries, and memory leaks. "
-        "Rules: Do not flag normal local loops or standard variables. Only flag concrete performance issues."
+        "Each finding must include category ('performance'), severity ('critical', 'high', 'medium', 'low'), title, body, path, line, confidence. "
+        "Focus on: N+1 database queries, unbounded external API calls, resource leaks (such as unclosed file handles without context managers), unindexed large queries, and memory leaks. "
+        "Rules: Do not flag normal local loops or standard variables. Only flag concrete performance and resource issues."
     )
     diff_text = diff_excerpt(state.get("files", []), full_diff=state.get("diff", ""))
     logger.info(
