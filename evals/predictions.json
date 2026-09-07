@@ -1,0 +1,207 @@
+{
+  "findings": [
+    {
+      "file": "javascript/js_06_security.js",
+      "line": 4,
+      "category": "SECURITY",
+      "severity": "HIGH",
+      "description": "Hardcoded credentials detected in evals/code_review_eval_dataset/datasets/javascript/js_06_security.js:4-5: Hardcoded credentials (including host, username, or password) are committed in code. Move credentials to environment variables or a secrets manager."
+    },
+    {
+      "file": "javascript/js_12_mixed.js",
+      "line": 3,
+      "category": "SECURITY",
+      "severity": "HIGH",
+      "description": "Potential secret committed in the diff: A new line appears to contain a hard-coded credential. Move it to a secret store and rotate it."
+    },
+    {
+      "file": "javascript/js_12_mixed.js",
+      "line": 6,
+      "category": "SECURITY",
+      "severity": "HIGH",
+      "description": "SQL appears to be built through string concatenation: Use parameterized queries or a query builder for untrusted input."
+    },
+    {
+      "file": "javascript/js_12_mixed.js",
+      "line": 6,
+      "category": "PERFORMANCE",
+      "severity": "MEDIUM",
+      "description": "Unbounded column selection: Prefer explicit columns for hot paths."
+    },
+    {
+      "file": "javascript/js_14_all.js",
+      "line": 1,
+      "category": "SECURITY",
+      "severity": "HIGH",
+      "description": "Potential secret committed in the diff: A new line appears to contain a hard-coded credential. Move it to a secret store and rotate it."
+    },
+    {
+      "file": "javascript/js_14_all.js",
+      "line": 31,
+      "category": "SECURITY",
+      "severity": "HIGH",
+      "description": "SQL appears to be built through string concatenation: Use parameterized queries or a query builder for untrusted input."
+    },
+    {
+      "file": "javascript/js_14_all.js",
+      "line": 31,
+      "category": "PERFORMANCE",
+      "severity": "MEDIUM",
+      "description": "Unbounded column selection: Prefer explicit columns for hot paths."
+    },
+    {
+      "file": "javascript/ts_13_mixed.ts",
+      "line": 6,
+      "category": "SECURITY",
+      "severity": "HIGH",
+      "description": "Potential secret committed in the diff: A new line appears to contain a hard-coded credential. Move it to a secret store and rotate it."
+    },
+    {
+      "file": "javascript/ts_13_mixed.ts",
+      "line": 12,
+      "category": "PERFORMANCE",
+      "severity": "MEDIUM",
+      "description": "Possible N+1 work inside a loop: Batch, preload, or move async/database work outside the loop."
+    },
+    {
+      "file": "javascript/ts_15_all.ts",
+      "line": 3,
+      "category": "SECURITY",
+      "severity": "HIGH",
+      "description": "Potential secret committed in the diff: A new line appears to contain a hard-coded credential. Move it to a secret store and rotate it."
+    },
+    {
+      "file": "javascript/ts_15_all.ts",
+      "line": 9,
+      "category": "PERFORMANCE",
+      "severity": "MEDIUM",
+      "description": "Possible N+1 work inside a loop (lines 9-10): Batch, preload, or move async/database work outside the loop."
+    },
+    {
+      "file": "python/py_04_bug.py",
+      "line": 4,
+      "category": "BUG",
+      "severity": "HIGH",
+      "description": "Division by zero in process_orders: The function divides an accumulated total by len(orders) without checking if orders is empty. Passing an empty list causes a ZeroDivisionError. Add a guard check 'if not orders: return 0' before performing division."
+    },
+    {
+      "file": "python/py_05_bug.py",
+      "line": 2,
+      "category": "BUG",
+      "severity": "HIGH",
+      "description": "Incorrect discount calculation treats percentage as raw multiplier: The calculation multiplies price by discount_percent directly without dividing by 100. Treating a percentage (e.g. 10) as a fraction results in an off-by-scale discount that exceeds the original price and produces negative final prices. Use price * (discount_percent / 100)."
+    },
+    {
+      "file": "python/py_06_security.py",
+      "line": 3,
+      "category": "SECURITY",
+      "severity": "HIGH",
+      "description": "Hardcoded credentials detected in evals/code_review_eval_dataset/datasets/python/py_06_security.py:3-4: Hardcoded credentials (including host, username, or password) are committed in code. Move credentials to environment variables or a secrets manager."
+    },
+    {
+      "file": "python/py_11_style.py",
+      "line": 2,
+      "category": "STYLE",
+      "severity": "LOW",
+      "description": "Unused import 'os': Module 'os' is imported but never referenced in the file. Remove unused imports to keep code clean and avoid unnecessary overhead."
+    },
+    {
+      "file": "python/py_11_style.py",
+      "line": 5,
+      "category": "PERFORMANCE",
+      "severity": "MEDIUM",
+      "description": "Unclosed file resource leak: The file handle is opened with open() but never closed with file.close() or managed inside a 'with open(...) as file:' context manager. Unclosed file handles leak OS file descriptors and delay flushing data to disk."
+    },
+    {
+      "file": "python/py_12_mixed.py",
+      "line": 1,
+      "category": "STYLE",
+      "severity": "LOW",
+      "description": "Unused import 'sqlite3': Module 'sqlite3' is imported but never referenced in the file. Remove unused imports to keep code clean and avoid unnecessary overhead."
+    },
+    {
+      "file": "python/py_12_mixed.py",
+      "line": 3,
+      "category": "SECURITY",
+      "severity": "HIGH",
+      "description": "Potential secret committed in the diff: A new line appears to contain a hard-coded credential. Move it to a secret store and rotate it."
+    },
+    {
+      "file": "python/py_12_mixed.py",
+      "line": 6,
+      "category": "SECURITY",
+      "severity": "HIGH",
+      "description": "SQL appears to be built through string concatenation: Use parameterized queries or a query builder for untrusted input."
+    },
+    {
+      "file": "python/py_12_mixed.py",
+      "line": 6,
+      "category": "PERFORMANCE",
+      "severity": "MEDIUM",
+      "description": "Unbounded column selection: Prefer explicit columns for hot paths."
+    },
+    {
+      "file": "python/py_12_mixed.py",
+      "line": 15,
+      "category": "BUG",
+      "severity": "HIGH",
+      "description": "Division by zero in process_orders: The function divides an accumulated total by len(orders) without checking if orders is empty. Passing an empty list causes a ZeroDivisionError. Add a guard check 'if not orders: return 0' before performing division."
+    },
+    {
+      "file": "python/py_13_mixed.py",
+      "line": 14,
+      "category": "SECURITY",
+      "severity": "HIGH",
+      "description": "Potential secret committed in the diff: A new line appears to contain a hard-coded credential. Move it to a secret store and rotate it."
+    },
+    {
+      "file": "python/py_14_all.py",
+      "line": 1,
+      "category": "SECURITY",
+      "severity": "HIGH",
+      "description": "Potential secret committed in the diff: A new line appears to contain a hard-coded credential. Move it to a secret store and rotate it."
+    },
+    {
+      "file": "python/py_14_all.py",
+      "line": 16,
+      "category": "PERFORMANCE",
+      "severity": "MEDIUM",
+      "description": "Unclosed file resource leak: The file handle is opened with open() but never closed with file.close() or managed inside a 'with open(...) as file:' context manager. Unclosed file handles leak OS file descriptors and delay flushing data to disk."
+    },
+    {
+      "file": "python/py_14_all.py",
+      "line": 23,
+      "category": "SECURITY",
+      "severity": "HIGH",
+      "description": "SQL appears to be built through string concatenation: Use parameterized queries or a query builder for untrusted input."
+    },
+    {
+      "file": "python/py_14_all.py",
+      "line": 23,
+      "category": "PERFORMANCE",
+      "severity": "MEDIUM",
+      "description": "Unbounded column selection: Prefer explicit columns for hot paths."
+    },
+    {
+      "file": "python/py_15_all.py",
+      "line": 3,
+      "category": "SECURITY",
+      "severity": "HIGH",
+      "description": "Potential secret committed in the diff: A new line appears to contain a hard-coded credential. Move it to a secret store and rotate it."
+    },
+    {
+      "file": "python/py_15_all.py",
+      "line": 13,
+      "category": "BUG",
+      "severity": "HIGH",
+      "description": "Division by zero in process_orders: The function divides an accumulated total by len(orders) without checking if orders is empty. Passing an empty list causes a ZeroDivisionError. Add a guard check 'if not orders: return 0' before performing division."
+    },
+    {
+      "file": "code_review_eval_dataset/README.md",
+      "line": 40,
+      "category": "STYLE",
+      "severity": "INFO",
+      "description": "Line is difficult to scan (lines 40-70): Break the expression into named parts."
+    }
+  ]
+}
