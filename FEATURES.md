@@ -88,6 +88,39 @@ Each user's connected repositories, indexed codebases, review history, and findi
 ### GitHub App native integration
 Installs directly via GitHub's App marketplace pattern — no manual webhook setup required. Reviews are posted as native GitHub PR review comments with inline annotations on specific diff lines. The bot appears as `deva-codereviewai` in the PR timeline, indistinguishable in format from a human reviewer's comments.
 
+### Automated evaluation & benchmark pipeline
+CodeReviewAI includes a built-in automated evaluation framework (`evals/`) to continuously benchmark review agent accuracy and track quality over time against an annotated ground-truth test suite:
+
+- **Benchmark Dataset**: 30 diverse test files (15 Python, 15 JavaScript/TypeScript) containing clean controls, isolated faults, and multi-category issues spanning BUG, SECURITY, PERFORMANCE, and STYLE.
+- **Neon PostgreSQL Sync**: Directly fetches actual review findings from the Neon database by `review_id` and formats them to the evaluation schema.
+- **Semantic & Proximity Matching**: Enforces strict 1-to-1 matching based on normalized file paths, normalized categories, line distance ($\le 3$ lines), and semantic word overlap ($\ge 30\%$).
+- **Core Evaluation Metrics**:
+  - **Precision**: Proportion of flagged issues that correspond to actual ground-truth defects (`TP / (TP + FP)`).
+  - **Recall**: Proportion of genuine defects successfully caught by the review agents (`TP / (TP + FN)`).
+  - **F1 Score**: Harmonic mean of Precision and Recall.
+  - **Severity Accuracy**: Precision of the predicted severity ratings on true positive matches.
+  - **Category Breakdown**: Granular recall per category (Security, Bug, Performance, Style).
+
+#### Baseline Benchmark Performance (Review ID: 94)
+
+| Metric | Result |
+|--------|--------|
+| **Ground Truth Findings** | 74 |
+| **Predicted Findings** | 29 |
+| **True Positives (TP)** | 22 |
+| **False Positives (FP)** | 7 |
+| **False Negatives (FN)** | 52 |
+| **Precision** | **75.86%** |
+| **Recall** | **29.73%** |
+| **F1 Score** | **42.72%** |
+| **Severity Accuracy** | **81.82%** |
+
+**Category-wise Recall**:
+- **Security**: 14/22 (63.64%)
+- **Bug**: 4/15 (26.67%)
+- **Performance**: 3/18 (16.67%)
+- **Style**: 1/19 (5.26%)
+
 ---
 
 ## Architecture
@@ -157,3 +190,4 @@ Postgres (findings, reviews, agent runs stored per commit SHA)
 | Merge conflict line-level detail | ✅ | ✅ | ❌ | Partial |
 | Per-user data isolation | ✅ | ✅ | ✅ | ✅ |
 | Self-hostable / open pipeline | ✅ | ❌ | ✅ | ❌ |
+| Automated benchmark evals | ✅ | ❌ | ❌ | ❌ |
