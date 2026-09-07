@@ -15,21 +15,21 @@ async def style_agent(state):
     namespace = state.get("repository", {}).get("fullName", "").replace("/", "__")
     return_indent_by_path = {}
     declared_by_path = collect_declared_identifiers(state.get("files", []))
-    
+
     unique_files = {file.get("path") for file in state.get("files", []) if file.get("path") and file.get("status") != "removed"}
     file_contexts = {}
-    
+
     async def fetch_file_context(path):
         try:
-            return path, await retrieve_context(namespace, f"{path} style standards")
+            return path, await retrieve_context(namespace, f"{path} style standards naming", limit=5)
         except Exception:
             return path, []
-            
+
     results = await asyncio.gather(*(fetch_file_context(path) for path in unique_files))
     for path, ctx in results:
         file_contexts[path] = ctx
         contexts.extend([c.get("text") for c in ctx if c.get("text")])
-        
+
     py_lines_by_path = {}
     py_imports = []
     for file, line, code in iter_added_lines(state.get("files", [])):
@@ -43,7 +43,7 @@ async def style_agent(state):
         lower = code.lower()
         is_js = is_javascript_path(path)
         indent = len(code) - len(code.lstrip())
-        
+
         if len(code) > 140:
             findings.append(finding("style", "low", "Line is difficult to scan", "Break the expression into named parts.", file, line, 0.7, rag_context=context))
         if re.search(r"\b(temp|foo|bar|asdf)\b", code):
@@ -55,7 +55,7 @@ async def style_agent(state):
             findings.append(finding("style", "high", "Implicit global assignment", "This assignment has no const, let, or var declaration, so it can create or overwrite a global variable. Declare the variable explicitly.", file, line, 0.84, rag_context=context))
         if is_js and re.search(r"\bnew\s+Buffer\s*\(", code):
             findings.append(finding("style", "medium", "Deprecated Buffer constructor", "The bare Buffer constructor is deprecated and can be unsafe. Use Buffer.from() or Buffer.alloc() instead.", file, line, 0.86, rag_context=context))
-            
+
         if is_js and re.search(r"\bfind\s*\(\s*(\w+)\s*=>\s*\1\.id\s*===\s*req\.params\.(\w+)\s*\)", code):
             findings.append(finding("bug", "high", "Type mismatch in comparison: numeric 'id' strictly compared with string route parameter", "req.params is an Express object where route parameters are always strings, while user.id is a number. Strict equality ('===') across different types always evaluates to false, causing find() to always return undefined. This is the primary root cause of subsequent lookup failures and TypeErrors. Convert the route parameter to a number using Number(req.params.id) or parseInt(req.params.id, 10).", file, line, 0.98, rag_context=context))
         if is_js and re.search(r"\bif\s*\(\s*(\w+)\.role\b", code):
@@ -83,6 +83,17 @@ async def style_agent(state):
                 builtins = {"null", "undefined", "true", "false", "NaN", "Infinity", "user", "this"}
                 if ref_id not in declared_by_path.get(path, set()) and ref_id not in builtins:
                     findings.append(finding("style", "critical", f"Reference to undeclared identifier '{ref_id}'", f"Identifier '{ref_id}' is referenced but never declared in scope, leading to a ReferenceError at runtime.", file, line, 0.95, rag_context=context))
+        if is_js and re.search(r"\bvar\s+", code):
+            findings.append(finding("style", "low", "var declaration should use let or const", "var is function-scoped and hoisted, which can cause unexpected behavior. Replace with block-scoped let (if the value is reassigned) or const (if it is not).", file, line, 0.82, rag_context=context))
+        if path.endswith(".py") and re.search(r"\bexcept\s*:\s*$", code.rstrip()):
+            findings.append(finding("style", "medium", "Bare except catches all exceptions", "A bare except: clause catches every exception including SystemExit and KeyboardInterrupt. Specify the exception types you intend to handle (e.g. except ValueError:) to avoid silencing unexpected errors.", file, line, 0.85, rag_context=context))
+        if is_js and re.search(r"\bcatch\s*\(\s*\w+\s*\)\s*\{\s*\}", code):
+            findings.append(finding("style", "medium", "Empty catch block silently swallows exceptions", "An empty catch block discards the exception without logging or handling it. At minimum log the error or rethrow it.", file, line, 0.82, rag_context=context))
+        if path.endswith(".py") and re.search(r"^\s*for\s+\w+\s+in\s+range\s*\(\s*len\s*\(", code):
+            findings.append(finding("style", "low", "Manual index loop is unnecessarily verbose", "Iterating with range(len(collection)) is verbose and error-prone. Use 'for item in collection:' or 'for i, item in enumerate(collection):' instead.", file, line, 0.80, rag_context=context))
+        if is_js and re.search(r"\bfor\s*\(\s*(let|var|const)\s+\w+\s*=\s*0\s*;\s*\w+\s*<\s*\w+\.length\b", code):
+            findings.append(finding("style", "low", "Manual index loop is unnecessarily verbose", "Iterating with a numeric index counter is verbose. Use 'for...of' for values or 'Array.prototype.forEach' for callbacks.", file, line, 0.78, rag_context=context))
+
         ret_indent = return_indent_by_path.get(path)
         if ret_indent is not None:
             if indent < ret_indent:
@@ -93,7 +104,7 @@ async def style_agent(state):
                 return_indent_by_path[path] = None
         if lower.strip().startswith("return"):
             return_indent_by_path[path] = indent
-            
+
     for file, line, mod_name, pth, ctx in py_imports:
         file_lines = py_lines_by_path.get(pth, [])
         is_used = False
@@ -108,14 +119,14 @@ async def style_agent(state):
 
     context_str = "\n".join(set(contexts))
     llm_findings = await _groq_style_findings(state, context_str)
-    
+
     combined_findings = llm_findings + findings
     filtered_findings = []
     for f in combined_findings:
         title_lower = f.get("title", "").lower()
         body_lower = f.get("body", "").lower()
         text_to_check = title_lower + " " + body_lower
-        
+
         if "magic number" in text_to_check:
             if re.search(r"\b(magic number[s]?\s*(?:of|is|are|:)?\s*['\"]?(?:0|1|-1|2|100|1000)['\"]?)\b", text_to_check) or \
                re.search(r"\b(numbers?\s+2\s+and\s+1|number\s+2|number\s+1|number\s+0)\b", text_to_check):
@@ -134,19 +145,36 @@ async def style_agent(state):
 
 async def _groq_style_findings(state, context_str):
     system = (
-        "You are CodeReviewAI's code correctness, logic, and quality reviewer. Return JSON only: {\"findings\": [...]}. "
+        "You are CodeReviewAI's code quality, style, and bug reviewer. Return JSON only: {\"findings\": [...]}. "
         "Each finding must include category ('bug', 'style', 'performance'), severity ('critical', 'high', 'medium', 'low'), title, body, path, line, confidence. "
-        "Root Cause vs Symptom Analysis: "
-        "- When diagnosing a potential crash, runtime error, or undefined property access (e.g. user.role on undefined), trace backward to find the ROOT CAUSE (such as a type mismatch in find(), e.g. strict equality user.id === req.params.id comparing number with string). Always report the root cause as its own primary finding. "
-        "Bug & Logic Checklist: "
-        "1. Type mismatch in comparisons: Strict equality (===) between string route parameters (req.params.*) and numeric model IDs. "
-        "2. Missing existence validation: Accessing properties (like user.role) without checking if the lookup result is undefined. "
-        "3. Broken authorization logic: Checking target user role instead of requester authority, or missing auth checks on mutating routes. "
-        "4. Misleading success responses: Responding with success (e.g. 'User deleted') when the operation was not performed or failed. "
-        "5. Off-by-scale arithmetic errors: Percentage calculations multiplying by percentage without dividing by 100 (e.g. price * discount_percent). "
-        "6. Resource leaks: File handles opened with open() without a 'with' context manager or close(). "
-        "7. Division by zero: Dividing by collection length (len(orders)) without checking if the collection is empty. "
-        "8. Unused imports & dead code: Imported modules (e.g. 'import os') that are never referenced."
+
+        "=== BUG & LOGIC CHECKLIST === "
+        "Report each of these as category 'bug': "
+        "1. Type mismatch in comparisons: strict equality (===) between string route parameters (req.params.*) and numeric model IDs. Report as HIGH. "
+        "2. Missing existence validation: accessing properties (like .name, .role, .id) on a value returned by find(), filter()[0], or next() without checking it is not undefined/None. Report as HIGH. "
+        "3. Off-by-scale arithmetic: multiplying by a percentage value without dividing by 100 (e.g. price * discount_percent). Report as HIGH. "
+        "4. Division by zero: dividing by collection length (len(collection), array.length, numbers.length, scores.length) without an empty-collection guard. Flag every occurrence — in helper functions, averages, summaries. Report as HIGH. "
+        "5. StopIteration / ValueError: using next() on a generator or iterator without a default, where the element may not exist. Report as MEDIUM. "
+        "6. IndexError / TypeError on empty collection: accessing index [0] or [-1] on a list or array that could be empty (e.g. output[0], items[0] after filter without length check). Report as HIGH. "
+        "7. Property access on undefined: using .find() or .filter() result without checking if it is undefined/None before accessing properties. Report as HIGH. "
+        "8. Broken authorization logic: checking target user.role instead of requester identity, or missing auth checks on mutating routes. Report as HIGH. "
+        "9. Misleading success responses: responding 200 with 'success' or 'deleted' when the operation was not performed or failed. Report as MEDIUM. "
+        "10. Resource leaks: file handles opened with open() without a 'with' context manager or .close(). Report as MEDIUM. "
+
+        "=== STYLE & QUALITY CHECKLIST === "
+        "Report each of these as category 'style': "
+        "1. var declarations: any use of 'var' in JavaScript/TypeScript — flag and recommend 'const' or 'let'. Report as LOW. "
+        "2. Non-standard function naming: JavaScript/TypeScript functions or methods using PascalCase (e.g. function GetUser()) instead of camelCase. Report as LOW. "
+        "3. Non-standard interface/type naming: TypeScript interfaces or types NOT using PascalCase (e.g. 'interface user' instead of 'interface User'). Report as LOW. "
+        "4. Inconsistent property naming: object literals or class properties mixing camelCase and snake_case (e.g. user_name and userId in the same object). Report as LOW. "
+        "5. Manual index loop: using range(len(x)) in Python or a for(let i=0; i<x.length; i++) in JS where for...of / enumerate() would be clearer. Report as LOW. "
+        "6. Bare except/catch: Python 'except:' or JavaScript 'catch(e) {}' with an empty body or catching all exceptions without re-raising. Report as MEDIUM. "
+        "7. Unused local variable: a variable is assigned but never read in the same scope. Do NOT flag function parameters or loop variables. Report as LOW. "
+        "8. try/catch for non-exceptional control flow: using try/catch to check if a property exists or a function succeeds when a conditional check would be cleaner. Report as LOW. "
+        "9. Unused imports (Python only): any 'import X' where X is never referenced in the file. Report as LOW. "
+
+        "Rules: Trace root causes, not just symptoms. If a crash occurs at line 10 because a type mismatch at line 7 causes find() to return undefined, report the type mismatch as the primary bug. "
+        "Only report issues directly present in the diff."
     )
     diff_text = diff_excerpt(state.get("files", []), full_diff=state.get("diff", ""))
     logger.info(
@@ -155,7 +183,7 @@ async def _groq_style_findings(state, context_str):
         diff_length=len(diff_text),
         diff_preview=diff_text[:300] if diff_text else "",
     )
-    clean_ctx = context_str[:300] if context_str else ""
+    clean_ctx = context_str[:1200] if context_str else ""
     user = (
         f"Repository: {state.get('repository', {}).get('fullName')}\n"
         f"Pull request: {state.get('pullRequest', {}).get('title', '')}\n"

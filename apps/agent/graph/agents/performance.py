@@ -16,21 +16,21 @@ async def performance_agent(state):
     contexts = []
     namespace = state.get("repository", {}).get("fullName", "").replace("/", "__")
     loop_indent_by_path = {}
-    
+
     unique_files = {file.get("path") for file in state.get("files", []) if file.get("path") and file.get("status") != "removed"}
     file_contexts = {}
-    
+
     async def fetch_file_context(path):
         try:
-            return path, await retrieve_context(namespace, f"{path} performance query loop")
+            return path, await retrieve_context(namespace, f"{path} performance loop query", limit=5)
         except Exception:
             return path, []
-            
+
     results = await asyncio.gather(*(fetch_file_context(path) for path in unique_files))
     for path, ctx in results:
         file_contexts[path] = ctx
         contexts.extend([c.get("text") for c in ctx if c.get("text")])
-        
+
     for file, line, code in iter_added_lines(state.get("files", [])):
         lower = code.strip().lower()
         path = file.get("path")
@@ -50,12 +50,16 @@ async def performance_agent(state):
             findings.append(finding("performance", "medium", "Unclosed file resource leak", "The file handle is opened with open() but never closed with file.close() or managed inside a 'with open(...) as file:' context manager. Unclosed file handles leak OS file descriptors and delay flushing data to disk.", file, line, 0.92, rag_context=context))
         if "select *" in lower:
             findings.append(finding("performance", "low", "Unbounded column selection", "Prefer explicit columns for hot paths.", file, line, 0.66, rag_context=context))
-            
+        if re.search(r"\bresults?\s*=\s*results?\s*\+\s*\[", lower) or re.search(r"\boutput\s*=\s*output\s*\+\s*\[", lower) or re.search(r"\bnames?\s*=\s*names?\s*\+\s*\[", lower):
+            findings.append(finding("performance", "medium", "Repeated list concatenation is inefficient", "Using list = list + [item] inside a loop creates a new list object on every iteration, causing O(n²) memory copying. Use list.append(item) instead.", file, line, 0.88, rag_context=context))
+        if re.search(r"^\s*\w+\s*\+=\s*\w+\s*\+\s*\w+", code) and loop_indent is not None:
+            findings.append(finding("performance", "medium", "Repeated string concatenation in a loop is inefficient", "Concatenating strings with += inside a loop creates a new string object on every iteration. Collect parts in a list and join at the end.", file, line, 0.84, rag_context=context))
+
     dep_start = time.perf_counter()
     dep_contexts = []
     dep_queries_count = 0
     changed_symbols_by_file = {}
-    
+
     for file in state.get("files", []):
         path = file.get("path")
         if not path or file.get("status") == "removed":
@@ -67,7 +71,7 @@ async def performance_agent(state):
         symbols = detect_signature_changes(path, file.get("patch", ""))
         if symbols:
             changed_symbols_by_file[path] = symbols[:5]
-            
+
     tasks = []
     meta = []
     for path, symbols in changed_symbols_by_file.items():
@@ -78,7 +82,7 @@ async def performance_agent(state):
             meta.append((sym, ext))
             query_text = f"{sym} usage reference"
             tasks.append(retrieve_context(namespace, query_text, limit=3, extension=ext))
-            
+
     if tasks:
         query_results = await asyncio.gather(*tasks)
         for (sym, ext), res in zip(meta, query_results):
@@ -91,55 +95,67 @@ async def performance_agent(state):
                 dep_contexts.append(f"References to symbol '{sym}' in other {ext} files:\n{snippets_str}")
             else:
                 dep_contexts.append(f"References to symbol '{sym}' in other {ext} files: no other same-language references found in the indexed codebase")
-                
+
     dep_duration = int((time.perf_counter() - dep_start) * 1000)
     state["dependency_latency_ms"] = state.get("dependency_latency_ms", 0) + dep_duration
     if dep_queries_count > 0:
         logger.info("Dependency lookup completed", agent="performance", duration_ms=dep_duration, query_count=dep_queries_count)
-        
+
     context_str = "\n".join(set(contexts))
     if dep_contexts:
         context_str += "\n\n=== CROSS-FILE DEPENDENCY REFERENCES ===\n" + "\n\n".join(dep_contexts)
-        
+
     llm_findings = await _groq_performance_findings(state, context_str)
-    
+
     combined_findings = llm_findings + findings
     filtered_findings = []
     added_lines_text = " ".join(code.lower() for _, _, code in iter_added_lines(state.get("files", [])))
-    
+    has_any_loop = bool(re.search(r"\b(for|while)\b", added_lines_text))
+
     for f in combined_findings:
         title_lower = f.get("title", "").lower()
         body_lower = f.get("body", "").lower()
         text_to_check = title_lower + " " + body_lower
-        
+
         if "no database queries found" in text_to_check or "no database queries are present" in text_to_check or "no queries found" in text_to_check:
             continue
-            
-        db_terms = ["database", "query", "queries", "sql", "cache", "caching", "eager loading", "lazy loading", "index", "indexing"]
+
+        is_loop_perf = any(term in text_to_check for term in [
+            "nested loop", "nested loops", "repeated string concatenation", "list concatenation",
+            "repeated append", "repeated list", "quadratic", "o(n", "o(n²)", "o(n^2)",
+            "array.includes", "array.find", "repeated scan", "linear scan",
+            "list rebuild", "output =", "results ="
+        ])
+        if is_loop_perf:
+            if has_any_loop or re.search(r"\b(for|while)\b", text_to_check):
+                filtered_findings.append(f)
+                continue
+
+        db_terms = ["database", "sql", "cache", "caching", "eager loading", "lazy loading", "index", "indexing"]
         if any(term in text_to_check for term in db_terms):
-            db_kws = ["query", "select", "insert", "update", "delete", "db.", "pool.", "prisma.", "mongoose.", "sequelize.", "knex.", "execute", "sql"]
+            db_kws = ["query", "queries", "select", "insert", "update", "delete", "db.", "pool.", "prisma.", "mongoose.", "sequelize.", "knex.", "execute", "sql"]
             if not any(kw in added_lines_text for kw in db_kws):
                 continue
-                
+
         net_terms = ["network", "http", "fetch", "axios", "request"]
         if any(term in text_to_check for term in net_terms):
             net_kws = ["fetch", "axios", "http", "request", "client", "socket", "api"]
             if not any(kw in added_lines_text for kw in net_kws):
                 continue
-                
+
         file_terms = ["file system", "file io", "readfile", "writefile", "fs.", "file_"]
         if any(term in text_to_check for term in file_terms):
             file_kws = ["fs", "readfile", "writefile", "open", "file"]
             if not any(kw in added_lines_text for kw in file_kws):
                 continue
-                
+
         if "unbounded work" in text_to_check or "unbounded loop" in text_to_check or "unbounded iteration" in text_to_check:
             ext_kws = ["db", "fetch", "query", "select", "readfile", "stream", "api", "axios", "http", "cursor", "find", "csv"]
-            if not any(kw in added_lines_text for kw in ext_kws):
+            if not any(kw in added_lines_text for kw in ext_kws) and not has_any_loop:
                 continue
-                
+
         filtered_findings.append(f)
-        
+
     return filtered_findings
 
 
@@ -147,8 +163,17 @@ async def _groq_performance_findings(state, context_str):
     system = (
         "You are CodeReviewAI's performance reviewer. Return JSON only: {\"findings\": [...]}. "
         "Each finding must include category ('performance'), severity ('critical', 'high', 'medium', 'low'), title, body, path, line, confidence. "
-        "Focus on: N+1 database queries, unbounded external API calls, resource leaks (such as unclosed file handles without context managers), unindexed large queries, and memory leaks. "
-        "Rules: Do not flag normal local loops or standard variables. Only flag concrete performance and resource issues."
+        "Performance Checklist — check every item against the diff: "
+        "1. Nested loops creating O(n*m) or O(n²) complexity: a loop whose body contains another loop iterating over an unrelated collection. Report as HIGH. "
+        "2. N+1 query pattern: a database query, ORM call (.find, .query, .execute), or async fetch inside a for/while loop. Report as HIGH. "
+        "3. Repeated string concatenation in a loop: building a string with += or + inside a loop instead of collecting parts in a list and joining. Report as MEDIUM. "
+        "4. Repeated list concatenation: using list = list + [item] or output += [item] inside a loop instead of list.append(item). Report as MEDIUM. "
+        "5. Linear scan inside a loop: Array.includes(), Array.find(), list.index(), or 'in' membership test on a list/array inside a loop — O(n²) behaviour. Report as MEDIUM. "
+        "6. Unnecessary recomputation: re-evaluating the same pure expression (e.g. len(users), users.filter(...)) on every loop iteration when it could be computed once before the loop. Report as MEDIUM. "
+        "7. Unclosed resource leaks: file handles opened with open() without a 'with' context manager, database cursors not closed, connections not released. Report as MEDIUM. "
+        "8. Blocking synchronous I/O inside an async function: calling time.sleep(), open(), or synchronous requests inside an async def without await. Report as HIGH. "
+        "9. N+1 external API calls: awaiting an HTTP fetch or similar inside a loop when results could be batched. Report as HIGH. "
+        "Rules: Flag only concrete patterns directly present in the diff. Do not flag normal in-memory variable assignments, standard arithmetic, or local function calls with no I/O."
     )
     diff_text = diff_excerpt(state.get("files", []), full_diff=state.get("diff", ""))
     logger.info(
@@ -157,7 +182,7 @@ async def _groq_performance_findings(state, context_str):
         diff_length=len(diff_text),
         diff_preview=diff_text[:300] if diff_text else "",
     )
-    clean_ctx = context_str[:300] if context_str else ""
+    clean_ctx = context_str[:1200] if context_str else ""
     user = (
         f"Repository: {state.get('repository', {}).get('fullName')}\n"
         f"Pull request: {state.get('pullRequest', {}).get('title', '')}\n"
