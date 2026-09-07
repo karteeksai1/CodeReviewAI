@@ -41,6 +41,91 @@ To evaluate an automated review run executed by the CodeReviewAI pipeline:
    ```
 3. **Via API logs**: The worker outputs review IDs upon review completion.
 
+## Local Evaluation Workflow (No GitHub Required)
+
+This is the recommended way to benchmark the review agents against the full 30-file dataset and measure precision/recall.
+
+### Prerequisites
+
+The FastAPI agent must be running locally before starting an evaluation:
+
+```bash
+cd apps/agent
+uvicorn main:app --host 127.0.0.1 --port 8000
+```
+
+A `DATABASE_URL` or `NEON_DATABASE_URL` must be set in `.env` at the project root.
+
+---
+
+### Step 1 — Run the evaluation
+
+```bash
+python evals/run_eval.py --dataset evals/datasets/
+```
+
+This command:
+- Recursively discovers all `.py`, `.js`, and `.ts` files under `evals/datasets/`.
+- Builds a synthetic "added file" diff for each file (no real PR or commit required).
+- Sends every file through the existing FastAPI review agent in batches of 5.
+- Stores all findings in the Neon `findings` table under a new `review_id`.
+- Prints a summary at the end.
+
+Example output:
+
+```text
+Found 30 evaluation file(s) under evals/datasets
+Agent URL: http://127.0.0.1:8000
+Created evaluation review (ID: 97)
+  [ok] javascript/js_01_clean.js
+  [ok] javascript/js_04_bug.js
+  ...
+==================================================
+Evaluation completed.
+Files reviewed    : 30
+Files failed      : 0
+Review ID         : 97
+Findings generated: 31
+==================================================
+
+To evaluate against ground truth:
+  python evals/evaluate.py --review-id 97
+```
+
+Optional flags:
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--dataset PATH` | `evals/datasets` | Path to evaluation dataset root |
+| `--batch-size N` | `5` | Files per agent request |
+| `--verbose` | off | Print per-batch detail |
+
+---
+
+### Step 2 — Copy the Review ID
+
+Copy the `Review ID` from the output above (e.g. `97`).
+
+---
+
+### Step 3 — Compare against ground truth
+
+```bash
+python evals/evaluate.py --review-id 97
+```
+
+This fetches the findings for that review ID from Neon, normalizes paths and categories, and evaluates them against `evals/ground_truth.json`.
+
+---
+
+### Path normalization
+
+Files stored in the database as `javascript/js_04_bug.js` (relative to `evals/datasets/`) are automatically normalized to match ground truth entries like `javascript/js_04_bug.js` by the evaluator. The `evals/` prefix, `datasets/` prefix, and full absolute paths are all stripped correctly.
+
+---
+
+## Evaluating a Review from Neon PostgreSQL (by ID)
+
 ## Running the Evaluator
 
 ### Evaluating directly by review_id from Neon PostgreSQL
