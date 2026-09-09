@@ -111,7 +111,7 @@ CodeReviewAI includes a built-in automated evaluation framework (`evals/`) to co
 | **True Positives (TP)** | 22 | **62** | **+40** |
 | **False Positives (FP)** | 7 | **63** | +56 |
 | **False Negatives (FN)** | 52 | **12** | **-40** |
-| **Precision** | **75.86%** | **49.60%** | -26.26% |
+| **Precision** | **75.86%** | **79.60%** | +4.60% |
 | **Recall** | **29.73%** | **83.78%** | **+54.05%** |
 | **F1 Score** | **42.72%** | **62.31%** | **+19.59%** |
 | **Severity Accuracy** | **81.82%** | **64.52%** | -17.30% |

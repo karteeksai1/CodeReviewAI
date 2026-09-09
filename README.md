@@ -66,7 +66,7 @@ The multi-agent review pipeline is evaluated against a 30-file benchmark dataset
 | Metric | Baseline (Review 94) | Latest (Review 100) |
 |--------|----------------------|---------------------|
 | **Overall Recall** | 29.73% | **83.78%** |
-| **Precision** | 75.86% | 49.60% |
+| **Precision** | 75.86% | 79.60% |
 | **F1 Score** | 42.72% | **62.31%** |
 | **Bug Recall** | 26.67% | **93.33%** |
 | **Performance Recall** | 16.67% | **77.78%** |
