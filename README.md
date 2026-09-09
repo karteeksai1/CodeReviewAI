@@ -58,3 +58,19 @@ The GitHub webhook endpoint is `POST /webhook`. It verifies the HMAC signature a
 Use `render.yaml` for Render services. Add `NEON_DATABASE_URL` from Neon to both the API and worker services. Add `GROQ_API_KEY`, `HUGGINGFACE_API_KEY`, `PINECONE_API_KEY`, and `PINECONE_INDEX` to the agent service.
 
 Deploy `apps/web` separately to Vercel and set `NEXT_PUBLIC_API_URL` to your Render API URL.
+
+## Evaluation Benchmark
+
+The multi-agent review pipeline is evaluated against a 30-file benchmark dataset covering BUG, SECURITY, PERFORMANCE, and STYLE categories.
+
+| Metric | Baseline (Review 94) | Latest (Review 100) |
+|--------|----------------------|---------------------|
+| **Overall Recall** | 29.73% | **83.78%** |
+| **Precision** | 75.86% | 49.60% |
+| **F1 Score** | 42.72% | **62.31%** |
+| **Bug Recall** | 26.67% | **93.33%** |
+| **Performance Recall** | 16.67% | **77.78%** |
+| **Security Recall** | 63.64% | **86.36%** |
+| **Style Recall** | 5.26% | **78.95%** |
+
+See [`evals/README.md`](evals/README.md) for benchmark setup and evaluation workflows.
