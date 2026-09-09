@@ -5,28 +5,875 @@
       "line": 7,
       "category": "BUG",
       "severity": "HIGH",
-      "description": "Type mismatch in getUser id comparison: Using strict equality between numeric id and string id causes find to return undefined."
+      "description": "Type mismatch in comparison between string ID and numeric user ID: The getUser function compares the numeric user.id with the id parameter using strict equality (===). When a string is passed (e.g., \"1\"), the comparison fails, causing find to return undefined. This leads to a runtime error later. Convert id to a number or use loose equality before comparison."
     },
     {
       "file": "javascript/js_04_bug.js",
       "line": 8,
       "category": "BUG",
       "severity": "HIGH",
-      "description": "Accessing property on potentially undefined user: After find, user may be undefined; accessing user.name without check leads to runtime error."
+      "description": "Accessing property of potentially undefined user: After find, the code returns user.name without checking if user is defined. If no matching user is found, user is undefined and accessing .name throws a TypeError. Add a guard or return null/undefined before accessing properties."
     },
     {
       "file": "javascript/js_05_bug.js",
       "line": 6,
       "category": "BUG",
       "severity": "HIGH",
-      "description": "Division by zero in calculateAverage: When numbers array is empty, numbers.length is 0, causing division by zero."
+      "description": "Division by zero in calculateAverage: The function divides the total sum by numbers.length without checking if the array is empty, which results in a division by zero and NaN when numbers is an empty array."
     },
     {
       "file": "javascript/js_05_bug.js",
-      "line": 9,
+      "line": 10,
       "category": "BUG",
       "severity": "HIGH",
-      "description": "Index error in getFirstItem: Accessing items[0] without checking array length may throw error if array empty."
+      "description": "Accessing property of undefined in getFirstItem: The function returns items[0].name without verifying that items[0] exists, leading to a TypeError if the items array is empty."
+    },
+    {
+      "file": "javascript/js_06_security.js",
+      "line": 1,
+      "category": "SECURITY",
+      "severity": "HIGH",
+      "description": "Hardcoded credentials exposed via /config endpoint: The file js_06_security.js defines API_KEY and DB_PASSWORD as plain text constants and exposes them through the /config route, leaking sensitive information to any client that can access the endpoint. This violates best practices for secret management and could lead to credential compromise."
+    },
+    {
+      "file": "javascript/js_06_security.js",
+      "line": 4,
+      "category": "SECURITY",
+      "severity": "CRITICAL",
+      "description": "Potential secret committed in the diff: A new line appears to contain a hard-coded credential. Move it to a secret store and rotate it."
+    },
+    {
+      "file": "javascript/js_06_security.js",
+      "line": 5,
+      "category": "SECURITY",
+      "severity": "CRITICAL",
+      "description": "Potential secret committed in the diff: A new line appears to contain a hard-coded credential. Move it to a secret store and rotate it."
+    },
+    {
+      "file": "javascript/js_06_security.js",
+      "line": 7,
+      "category": "BUG",
+      "severity": "HIGH",
+      "description": "Exposes sensitive configuration via public endpoint: The /config route returns the API key and database password in plain JSON without any authentication or authorization checks. This allows any client to retrieve sensitive credentials, which is a critical security vulnerability."
+    },
+    {
+      "file": "javascript/js_07_security.js",
+      "line": 4,
+      "category": "SECURITY",
+      "severity": "HIGH",
+      "description": "Missing Authorization on DELETE /users/:id: The DELETE endpoint deletes a user by ID without verifying the requester's identity or permissions, allowing any client to delete any user."
+    },
+    {
+      "file": "javascript/js_07_security.js",
+      "line": 4,
+      "category": "BUG",
+      "severity": "HIGH",
+      "description": "Missing authorization checks on user deletion route: The DELETE /users/:id endpoint deletes a user without verifying that the requester is authenticated or authorized to perform this action. This can allow any client to delete any user by simply sending a DELETE request to the endpoint."
+    },
+    {
+      "file": "javascript/js_08_performance.js",
+      "line": 4,
+      "category": "PERFORMANCE",
+      "severity": "HIGH",
+      "description": "Nested loops causing O(n*m) complexity: The function `findUsers` contains nested loops iterating over `ids` and `users`, leading to O(n*m) time complexity."
+    },
+    {
+      "file": "javascript/js_08_performance.js",
+      "line": 13,
+      "category": "PERFORMANCE",
+      "severity": "MEDIUM",
+      "description": "Repeated string concatenation in loop: The function `buildCsv` concatenates strings using `+=` inside a loop, which can be inefficient for large datasets."
+    },
+    {
+      "file": "javascript/js_08_performance.js",
+      "line": 6,
+      "category": "BUG",
+      "severity": "HIGH",
+      "description": "Type mismatch in comparison between user.id and id: The strict equality check `user.id === id` may fail if `user.id` and `id` are of different types (e.g., string vs number). This can cause `findUsers` to miss matches. Consider normalizing types or using loose equality if appropriate."
+    },
+    {
+      "file": "javascript/js_08_performance.js",
+      "line": 4,
+      "category": "PERFORMANCE",
+      "severity": "MEDIUM",
+      "description": "Nested loops in findUsers lead to O(n*m) complexity: The implementation iterates over `ids` and for each id iterates over all `users`, resulting in quadratic time complexity. For large datasets this can be slow. A more efficient approach is to build a lookup map from user IDs to user objects and then map over `ids`."
+    },
+    {
+      "file": "javascript/js_10_style.js",
+      "line": 2,
+      "category": "STYLE",
+      "severity": "LOW",
+      "description": "Use of 'var' instead of 'let' or 'const': The function ProcessData declares a variable using 'var', which is function-scoped and can lead to unintended hoisting and reassignments. Prefer 'const' for immutable bindings or 'let' for mutable ones."
+    },
+    {
+      "file": "javascript/js_10_style.js",
+      "line": 1,
+      "category": "STYLE",
+      "severity": "LOW",
+      "description": "PascalCase function name: The function ProcessData is named using PascalCase. In JavaScript, function names should follow camelCase convention for consistency with the language style guide."
+    },
+    {
+      "file": "javascript/js_10_style.js",
+      "line": 10,
+      "category": "STYLE",
+      "severity": "LOW",
+      "description": "Try/catch used for non-exceptional control flow: The getName function uses a try/catch block to access a property that may not exist. This is a non-exceptional control flow and can be replaced with a simple null check: return user ? user.name : null;"
+    },
+    {
+      "file": "javascript/js_10_style.js",
+      "line": 2,
+      "category": "STYLE",
+      "severity": "LOW",
+      "description": "var declaration should use let or const: var is function-scoped and hoisted, which can cause unexpected behavior. Replace with block-scoped let (if the value is reassigned) or const (if it is not)."
+    },
+    {
+      "file": "javascript/js_10_style.js",
+      "line": 3,
+      "category": "STYLE",
+      "severity": "LOW",
+      "description": "var declaration should use let or const: var is function-scoped and hoisted, which can cause unexpected behavior. Replace with block-scoped let (if the value is reassigned) or const (if it is not)."
+    },
+    {
+      "file": "javascript/js_10_style.js",
+      "line": 3,
+      "category": "STYLE",
+      "severity": "LOW",
+      "description": "Manual index loop is unnecessarily verbose: Iterating with a numeric index counter is verbose. Use 'for...of' for values or 'Array.prototype.forEach' for callbacks."
+    },
+    {
+      "file": "javascript/js_12_mixed.js",
+      "line": 3,
+      "category": "SECURITY",
+      "severity": "CRITICAL",
+      "description": "Hardcoded API token: The code defines a constant API_TOKEN with a literal value \"fake-live-token-777\", exposing a secret token in the source code. This can lead to credential leakage if the repository is public or accessed by unauthorized users."
+    },
+    {
+      "file": "javascript/js_12_mixed.js",
+      "line": 6,
+      "category": "SECURITY",
+      "severity": "HIGH",
+      "description": "SQL Injection Vulnerability in searchUsers: The searchUsers function constructs an SQL query by concatenating user input directly into the query string: \"SELECT * FROM users WHERE name = '\" + name. This allows an attacker to inject arbitrary SQL code via the name parameter, potentially compromising the database."
+    },
+    {
+      "file": "javascript/js_12_mixed.js",
+      "line": 3,
+      "category": "SECURITY",
+      "severity": "CRITICAL",
+      "description": "Potential secret committed in the diff: A new line appears to contain a hard-coded credential. Move it to a secret store and rotate it."
+    },
+    {
+      "file": "javascript/js_12_mixed.js",
+      "line": 6,
+      "category": "SECURITY",
+      "severity": "HIGH",
+      "description": "SQL appears to be built through string concatenation: Use parameterized queries or a query builder for untrusted input."
+    },
+    {
+      "file": "javascript/js_12_mixed.js",
+      "line": 17,
+      "category": "PERFORMANCE",
+      "severity": "MEDIUM",
+      "description": "Repeated list concatenation in loop: In function mapNames, the code uses result = result.concat([user.name]) inside a loop, which creates a new array on each iteration and copies all existing elements, leading to O(n^2) time complexity. Use result.push(user.name) instead."
+    },
+    {
+      "file": "javascript/js_12_mixed.js",
+      "line": 6,
+      "category": "PERFORMANCE",
+      "severity": "LOW",
+      "description": "Unbounded column selection: Prefer explicit columns for hot paths."
+    },
+    {
+      "file": "javascript/js_12_mixed.js",
+      "line": 6,
+      "category": "BUG",
+      "severity": "HIGH",
+      "description": "SQL query string missing closing quote and vulnerable to injection: The query string in searchUsers is constructed as \"SELECT * FROM users WHERE name = '\" + name; it lacks the closing single quote and does not escape or parameterize the name value, leading to a syntax error and SQL injection risk."
+    },
+    {
+      "file": "javascript/js_12_mixed.js",
+      "line": 11,
+      "category": "BUG",
+      "severity": "HIGH",
+      "description": "Division by zero in averageScores when scores array is empty: averageScores divides the sum of scores by scores.length without checking if the array is empty. If scores is [], scores.length is 0, causing a runtime error."
+    },
+    {
+      "file": "javascript/js_12_mixed.js",
+      "line": 17,
+      "category": "PERFORMANCE",
+      "severity": "LOW",
+      "description": "Inefficient array concatenation in mapNames: mapNames uses result = result.concat([user.name]) inside a loop, which creates a new array on each iteration. Using result.push(user.name) would be more efficient."
+    },
+    {
+      "file": "javascript/js_12_mixed.js",
+      "line": 15,
+      "category": "STYLE",
+      "severity": "LOW",
+      "description": "Use const instead of let for immutable array in mapNames: The result array in mapNames is never reassigned; it can be declared with const to express intent and avoid accidental reassignment."
+    },
+    {
+      "file": "javascript/js_14_all.js",
+      "line": 1,
+      "category": "SECURITY",
+      "severity": "HIGH",
+      "description": "Hardcoded Password: The code defines a constant PASSWORD with a plaintext value, exposing a secret credential."
+    },
+    {
+      "file": "javascript/js_14_all.js",
+      "line": 31,
+      "category": "SECURITY",
+      "severity": "HIGH",
+      "description": "SQL Injection Vulnerability: The getUser function builds an SQL query by concatenating user input directly, allowing attackers to inject arbitrary SQL."
+    },
+    {
+      "file": "javascript/js_14_all.js",
+      "line": 1,
+      "category": "SECURITY",
+      "severity": "CRITICAL",
+      "description": "Potential secret committed in the diff: A new line appears to contain a hard-coded credential. Move it to a secret store and rotate it."
+    },
+    {
+      "file": "javascript/js_14_all.js",
+      "line": 31,
+      "category": "SECURITY",
+      "severity": "HIGH",
+      "description": "SQL appears to be built through string concatenation: Use parameterized queries or a query builder for untrusted input."
+    },
+    {
+      "file": "javascript/js_14_all.js",
+      "line": 15,
+      "category": "BUG",
+      "severity": "HIGH",
+      "description": "Accessing property on undefined in ProcessUsers: When no users match the provided ids, `result` remains empty. The code then attempts to return `result[0].name`, which accesses the `name` property of `undefined`, causing a runtime TypeError. This should be guarded or return a meaningful value instead."
+    },
+    {
+      "file": "javascript/js_14_all.js",
+      "line": 31,
+      "category": "BUG",
+      "severity": "HIGH",
+      "description": "Malformed SQL query and injection vulnerability in getUser: The SQL string is constructed as `\"SELECT * FROM users WHERE name = '\" + name;` which omits the closing quote and does not escape the `name` parameter. This results in a syntax error and makes the function vulnerable to SQL injection. The query should be properly quoted and parameterized."
+    },
+    {
+      "file": "javascript/js_14_all.js",
+      "line": 4,
+      "category": "STYLE",
+      "severity": "LOW",
+      "description": "Use of var instead of let/const: The variable `result` is declared with `var`, which has function scope and can lead to accidental reassignments. Modern JavaScript prefers `let` for mutable bindings and `const` for immutable ones."
+    },
+    {
+      "file": "javascript/js_14_all.js",
+      "line": 3,
+      "category": "STYLE",
+      "severity": "LOW",
+      "description": "Function name should be camelCase: `ProcessUsers` follows PascalCase, which is conventionally used for constructors or classes in JavaScript. Regular functions should use camelCase, e.g., `processUsers`."
+    },
+    {
+      "file": "javascript/js_14_all.js",
+      "line": 4,
+      "category": "STYLE",
+      "severity": "LOW",
+      "description": "var declaration should use let or const: var is function-scoped and hoisted, which can cause unexpected behavior. Replace with block-scoped let (if the value is reassigned) or const (if it is not)."
+    },
+    {
+      "file": "javascript/ts_09_performance.ts",
+      "line": 5,
+      "category": "PERFORMANCE",
+      "severity": "MEDIUM",
+      "description": "Linear scan inside loop in uniqueValues: The function uniqueValues uses result.includes(value) inside a for loop, causing an O(n^2) time complexity due to a linear scan on each iteration."
+    },
+    {
+      "file": "javascript/ts_09_performance.ts",
+      "line": 14,
+      "category": "PERFORMANCE",
+      "severity": "HIGH",
+      "description": "Nested loops in lookup function: The lookup function maps over ids and for each id performs items.find, resulting in a nested loop that leads to O(n*m) complexity. This is a high severity performance issue."
+    },
+    {
+      "file": "javascript/ts_09_performance.ts",
+      "line": 1,
+      "category": "PERFORMANCE",
+      "severity": "MEDIUM",
+      "description": "Inefficient uniqueValues implementation: The `uniqueValues` function checks for duplicates using `Array.prototype.includes` inside a loop, resulting in O(n\u00b2) time complexity. For large input arrays this can cause significant performance degradation. Consider using a Set to track seen values for O(n) complexity."
+    },
+    {
+      "file": "javascript/ts_09_performance.ts",
+      "line": 10,
+      "category": "PERFORMANCE",
+      "severity": "MEDIUM",
+      "description": "Inefficient lookup implementation: The `lookup` function performs a linear search (`Array.prototype.find`) for each id in the `ids` array, leading to O(n*m) time complexity. For large datasets, this can be slow. Using a map from id to item would reduce the lookup to O(1) per id, achieving overall O(n+m) complexity."
+    },
+    {
+      "file": "javascript/ts_11_style.ts",
+      "line": 1,
+      "category": "STYLE",
+      "severity": "LOW",
+      "description": "Interface name 'user' should be PascalCase: In TypeScript, interfaces should be named using PascalCase. The interface 'user' violates this convention."
+    },
+    {
+      "file": "javascript/ts_11_style.ts",
+      "line": 6,
+      "category": "STYLE",
+      "severity": "LOW",
+      "description": "Function name 'GetUserName' should be camelCase: In JavaScript/TypeScript, function names should use camelCase. The function 'GetUserName' uses PascalCase."
+    },
+    {
+      "file": "javascript/ts_11_style.ts",
+      "line": 2,
+      "category": "STYLE",
+      "severity": "LOW",
+      "description": "Inconsistent property naming in interface 'user': Properties 'Name' and 'AGE' use different naming conventions. Prefer consistent camelCase or PascalCase."
+    },
+    {
+      "file": "javascript/ts_11_style.ts",
+      "line": 7,
+      "category": "STYLE",
+      "severity": "LOW",
+      "description": "Unused local variable 'unusedValue': The variable 'unusedValue' is declared but never used."
+    },
+    {
+      "file": "javascript/ts_13_mixed.ts",
+      "line": 6,
+      "category": "SECURITY",
+      "severity": "HIGH",
+      "description": "Hardcoded API Key: The code defines a constant API_KEY with a literal value \"fake-key-888\". This exposes a secret in source code, which can be leaked if the repository is public or accessed by unauthorized users. It should be stored in environment variables or a secure vault instead of being hardcoded."
+    },
+    {
+      "file": "javascript/ts_13_mixed.ts",
+      "line": 6,
+      "category": "SECURITY",
+      "severity": "CRITICAL",
+      "description": "Potential secret committed in the diff: A new line appears to contain a hard-coded credential. Move it to a secret store and rotate it."
+    },
+    {
+      "file": "javascript/ts_13_mixed.ts",
+      "line": 21,
+      "category": "BUG",
+      "severity": "HIGH",
+      "description": "Incorrect property access in getName: The function getName returns user.Name, but the User type defines property 'name' (lowercase). This will return undefined."
+    },
+    {
+      "file": "javascript/ts_13_mixed.ts",
+      "line": 20,
+      "category": "STYLE",
+      "severity": "LOW",
+      "description": "Unused variable 'unused' in getName: Variable 'unused' is declared but never used."
+    },
+    {
+      "file": "javascript/ts_13_mixed.ts",
+      "line": 6,
+      "category": "STYLE",
+      "severity": "LOW",
+      "description": "Unused constant API_KEY: Constant 'API_KEY' is declared but never used."
+    },
+    {
+      "file": "javascript/ts_15_all.ts",
+      "line": 3,
+      "category": "SECURITY",
+      "severity": "CRITICAL",
+      "description": "Hardcoded API Key: The code defines a constant `API_KEY` with a literal value \"fake-live-key-123\". Hardcoding API keys in source code exposes them to anyone who can read the repository, increasing the risk of unauthorized access if the code is ever shared or deployed. This should be replaced with a secure configuration mechanism such as environment variables or a secrets manager."
+    },
+    {
+      "file": "javascript/ts_15_all.ts",
+      "line": 22,
+      "category": "SECURITY",
+      "severity": "CRITICAL",
+      "description": "Hardcoded Admin Credentials: The `authenticate` function checks for a hardcoded username \"admin\" and password \"fake-admin-321\". Storing credentials directly in code is a severe security risk, as it allows anyone with repository access to authenticate as an administrator. Credentials should be stored securely and verified against a protected user store."
+    },
+    {
+      "file": "javascript/ts_15_all.ts",
+      "line": 3,
+      "category": "SECURITY",
+      "severity": "CRITICAL",
+      "description": "Potential secret committed in the diff: A new line appears to contain a hard-coded credential. Move it to a secret store and rotate it."
+    },
+    {
+      "file": "javascript/ts_15_all.ts",
+      "line": 18,
+      "category": "BUG",
+      "severity": "HIGH",
+      "description": "Division by zero in average function: The average function divides by values.length without checking if the array is empty, leading to a division by zero error and returning Infinity."
+    },
+    {
+      "file": "javascript/ts_15_all.ts",
+      "line": 3,
+      "category": "STYLE",
+      "severity": "LOW",
+      "description": "Unused variable API_KEY: The constant API_KEY is defined but never used in the file, which may indicate dead code or a missing implementation."
+    },
+    {
+      "file": "python/py_04_bug.py",
+      "line": 7,
+      "category": "BUG",
+      "severity": "MEDIUM",
+      "description": "Unprotected next() call may raise StopIteration: The function get_user uses next(user for user in users if user[\"id\"] == user_id) without providing a default value. If no user matches the given user_id, this will raise a StopIteration exception, causing the program to crash. This is a missing existence validation bug as described in the checklist."
+    },
+    {
+      "file": "python/py_04_bug.py",
+      "line": 4,
+      "category": "BUG",
+      "severity": "HIGH",
+      "description": "Division by zero in process_orders: The function divides an accumulated total by len(orders) without checking if orders is empty. Passing an empty list causes a ZeroDivisionError. Add a guard check 'if not orders: return 0' before performing division."
+    },
+    {
+      "file": "python/py_05_bug.py",
+      "line": 2,
+      "category": "BUG",
+      "severity": "HIGH",
+      "description": "Off-by-scale arithmetic in discount calculation: The function calculate_discount multiplies the price by discount_percent directly, treating the percent as a whole number. For example, calculate_discount(100, 10) returns -900 because it computes 100 * 10 = 1000 and then 100 - 1000. The discount_percent should be divided by 100 before applying it to the price."
+    },
+    {
+      "file": "python/py_05_bug.py",
+      "line": 2,
+      "category": "BUG",
+      "severity": "HIGH",
+      "description": "Incorrect discount calculation treats percentage as raw multiplier: The calculation multiplies price by discount_percent directly without dividing by 100. Treating a percentage (e.g. 10) as a fraction results in an off-by-scale discount that exceeds the original price and produces negative final prices. Use price * (discount_percent / 100)."
+    },
+    {
+      "file": "python/py_06_security.py",
+      "line": 3,
+      "category": "SECURITY",
+      "severity": "HIGH",
+      "description": "Hardcoded API key: The file python/py_06_security.py contains a hardcoded API key assigned to the variable API_KEY. This exposes the key in source code, increasing the risk of credential leakage and unauthorized access to the external API."
+    },
+    {
+      "file": "python/py_06_security.py",
+      "line": 4,
+      "category": "SECURITY",
+      "severity": "HIGH",
+      "description": "Hardcoded database password: The file python/py_06_security.py contains a hardcoded database password assigned to the variable DB_PASSWORD. Storing passwords in source code can lead to credential compromise and unauthorized database access."
+    },
+    {
+      "file": "python/py_06_security.py",
+      "line": 3,
+      "category": "SECURITY",
+      "severity": "CRITICAL",
+      "description": "Potential secret committed in the diff: A new line appears to contain a hard-coded credential. Move it to a secret store and rotate it."
+    },
+    {
+      "file": "python/py_06_security.py",
+      "line": 4,
+      "category": "SECURITY",
+      "severity": "CRITICAL",
+      "description": "Potential secret committed in the diff: A new line appears to contain a hard-coded credential. Move it to a secret store and rotate it."
+    },
+    {
+      "file": "python/py_07_security.py",
+      "line": 14,
+      "category": "BUG",
+      "severity": "HIGH",
+      "description": "Missing authentication on debug route: The /debug endpoint returns a secret key without any authentication or authorization checks, exposing sensitive information. This can lead to security breaches if the endpoint is accessible to unauthorized users."
+    },
+    {
+      "file": "python/py_08_performance.py",
+      "line": 3,
+      "category": "PERFORMANCE",
+      "severity": "HIGH",
+      "description": "Nested loops causing O(n*m) complexity: The function `find_orders` contains a nested loop: it iterates over `wanted_ids` and for each id scans the entire `orders` list. This results in O(n*m) time complexity, which can be inefficient for large datasets."
+    },
+    {
+      "file": "python/py_08_performance.py",
+      "line": 13,
+      "category": "PERFORMANCE",
+      "severity": "MEDIUM",
+      "description": "Repeated string concatenation in a loop: In `build_report`, the string `report` is built by repeatedly using `+=` inside a loop. This creates a new string on each iteration, leading to quadratic time and memory usage. Using a list to collect lines and then `''.join()` would be more efficient."
+    },
+    {
+      "file": "python/py_08_performance.py",
+      "line": 3,
+      "category": "PERFORMANCE",
+      "severity": "MEDIUM",
+      "description": "Inefficient nested loops in find_orders: The function find_orders uses a nested loop to search for each wanted_id in the orders list, resulting in O(n*m) time complexity. For large datasets this can become a performance bottleneck. Consider building a lookup dictionary keyed by order id to achieve O(n + m) complexity."
+    },
+    {
+      "file": "python/py_08_performance.py",
+      "line": 13,
+      "category": "PERFORMANCE",
+      "severity": "LOW",
+      "description": "String concatenation in build_report loop: The build_report function concatenates strings in a loop using report += ... which leads to O(n^2) time due to repeated reallocation. Use a list to collect lines and join them once for better performance."
+    },
+    {
+      "file": "python/py_09_performance.py",
+      "line": 5,
+      "category": "PERFORMANCE",
+      "severity": "MEDIUM",
+      "description": "Linear scan inside loop in unique_words: The function unique_words checks `if word not in result` inside a loop over words, resulting in an O(n^2) time complexity due to repeated linear scans of the result list."
+    },
+    {
+      "file": "python/py_09_performance.py",
+      "line": 12,
+      "category": "PERFORMANCE",
+      "severity": "HIGH",
+      "description": "Nested loops in repeated_lookup: Inside repeated_lookup, a list comprehension `names = [x[\"name\"] for x in items]` is executed on every iteration of the outer loop, creating an O(n^2) nested loop pattern."
+    },
+    {
+      "file": "python/py_09_performance.py",
+      "line": 13,
+      "category": "PERFORMANCE",
+      "severity": "MEDIUM",
+      "description": "Linear scan inside loop in repeated_lookup: The membership test `if key in names` performs a linear scan of the names list on each iteration, contributing to O(n^2) complexity."
+    },
+    {
+      "file": "python/py_09_performance.py",
+      "line": 12,
+      "category": "PERFORMANCE",
+      "severity": "MEDIUM",
+      "description": "Repeated recomputation of names list in repeated_lookup: The list `names` is recomputed on every iteration of the outer loop instead of being computed once before the loop, causing unnecessary work."
+    },
+    {
+      "file": "python/py_10_style.py",
+      "line": 1,
+      "category": "STYLE",
+      "severity": "LOW",
+      "description": "Non-standard function naming: PascalCase: Function 'ProcessData' uses PascalCase; should use camelCase per convention."
+    },
+    {
+      "file": "python/py_10_style.py",
+      "line": 3,
+      "category": "STYLE",
+      "severity": "LOW",
+      "description": "Manual index loop: Using range and indexing to iterate over list; use for element in data for clarity."
+    },
+    {
+      "file": "python/py_10_style.py",
+      "line": 10,
+      "category": "STYLE",
+      "severity": "MEDIUM",
+      "description": "Bare except clause: Catching all exceptions in get_user_name; should catch specific exception like KeyError or TypeError."
+    },
+    {
+      "file": "python/py_10_style.py",
+      "line": 10,
+      "category": "STYLE",
+      "severity": "MEDIUM",
+      "description": "Bare except catches all exceptions: A bare except: clause catches every exception including SystemExit and KeyboardInterrupt. Specify the exception types you intend to handle (e.g. except ValueError:) to avoid silencing unexpected errors."
+    },
+    {
+      "file": "python/py_11_style.py",
+      "line": 5,
+      "category": "PERFORMANCE",
+      "severity": "MEDIUM",
+      "description": "Unclosed file resource: File opened with open() but not closed; use a with statement to ensure the file is properly closed."
+    },
+    {
+      "file": "python/py_11_style.py",
+      "line": 5,
+      "category": "PERFORMANCE",
+      "severity": "MEDIUM",
+      "description": "Unclosed file resource leak: The file handle is opened with open() but never closed with file.close() or managed inside a 'with open(...) as file:' context manager. Unclosed file handles leak OS file descriptors and delay flushing data to disk."
+    },
+    {
+      "file": "python/py_11_style.py",
+      "line": 5,
+      "category": "BUG",
+      "severity": "MEDIUM",
+      "description": "File handle not closed in load_user: The function load_user opens a file with open() but never closes it, leading to a resource leak. Use a with statement to ensure the file is closed."
+    },
+    {
+      "file": "python/py_11_style.py",
+      "line": 12,
+      "category": "STYLE",
+      "severity": "LOW",
+      "description": "Unused variable 'unused_variable': The variable unused_variable is defined but never used. Remove it to clean up the code."
+    },
+    {
+      "file": "python/py_11_style.py",
+      "line": 2,
+      "category": "STYLE",
+      "severity": "LOW",
+      "description": "Unused import 'os': The module os is imported but never used. Remove the import to avoid unnecessary imports."
+    },
+    {
+      "file": "python/py_12_mixed.py",
+      "line": 3,
+      "category": "SECURITY",
+      "severity": "HIGH",
+      "description": "Hardcoded API token: The file defines a hardcoded API token (API_TOKEN = \"fake-live-token-111\") which exposes a secret credential in source code. This should be stored securely (e.g., environment variable or secret manager)."
+    },
+    {
+      "file": "python/py_12_mixed.py",
+      "line": 6,
+      "category": "SECURITY",
+      "severity": "HIGH",
+      "description": "SQL injection vulnerability in search_users: The search_users function constructs an SQL query by concatenating user input directly into the query string: sql = \"SELECT * FROM users WHERE name = '\" + query. This allows an attacker to inject arbitrary SQL code. Use parameterized queries instead."
+    },
+    {
+      "file": "python/py_12_mixed.py",
+      "line": 3,
+      "category": "SECURITY",
+      "severity": "CRITICAL",
+      "description": "Potential secret committed in the diff: A new line appears to contain a hard-coded credential. Move it to a secret store and rotate it."
+    },
+    {
+      "file": "python/py_12_mixed.py",
+      "line": 6,
+      "category": "SECURITY",
+      "severity": "HIGH",
+      "description": "SQL appears to be built through string concatenation: Use parameterized queries or a query builder for untrusted input."
+    },
+    {
+      "file": "python/py_12_mixed.py",
+      "line": 11,
+      "category": "PERFORMANCE",
+      "severity": "MEDIUM",
+      "description": "Repeated list concatenation inside loop: Using `result += [row]` inside a loop repeatedly creates a new list each iteration, leading to O(n\u00b2) time and memory overhead. Replace with `result.append(row)` for linear performance."
+    },
+    {
+      "file": "python/py_12_mixed.py",
+      "line": 6,
+      "category": "PERFORMANCE",
+      "severity": "LOW",
+      "description": "Unbounded column selection: Prefer explicit columns for hot paths."
+    },
+    {
+      "file": "python/py_12_mixed.py",
+      "line": 6,
+      "category": "BUG",
+      "severity": "HIGH",
+      "description": "SQL injection vulnerability in search_users: The function constructs an SQL query by concatenating user input directly into the query string, which can allow attackers to inject arbitrary SQL code. Use parameterized queries instead."
+    },
+    {
+      "file": "python/py_12_mixed.py",
+      "line": 6,
+      "category": "BUG",
+      "severity": "HIGH",
+      "description": "Missing closing quote in SQL query: The SQL string built in search_users is missing a closing single quote after the query parameter, leading to a syntax error and potential injection vulnerability."
+    },
+    {
+      "file": "python/py_12_mixed.py",
+      "line": 10,
+      "category": "PERFORMANCE",
+      "severity": "LOW",
+      "description": "Inefficient list concatenation in search_users: Using result += [row] inside a loop creates a new list on each iteration. Replace with result.append(row) for better performance."
+    },
+    {
+      "file": "python/py_12_mixed.py",
+      "line": 15,
+      "category": "BUG",
+      "severity": "HIGH",
+      "description": "Division by zero in average_score: average_score divides the sum of scores by the length of the scores list without checking if the list is empty, which will raise a ZeroDivisionError."
+    },
+    {
+      "file": "python/py_12_mixed.py",
+      "line": 15,
+      "category": "BUG",
+      "severity": "HIGH",
+      "description": "Division by zero in process_orders: The function divides an accumulated total by len(orders) without checking if orders is empty. Passing an empty list causes a ZeroDivisionError. Add a guard check 'if not orders: return 0' before performing division."
+    },
+    {
+      "file": "python/py_12_mixed.py",
+      "line": 1,
+      "category": "STYLE",
+      "severity": "LOW",
+      "description": "Unused import 'sqlite3': Module 'sqlite3' is imported but never referenced in the file. Remove unused imports to keep code clean and avoid unnecessary overhead."
+    },
+    {
+      "file": "python/py_13_mixed.py",
+      "line": 14,
+      "category": "SECURITY",
+      "severity": "HIGH",
+      "description": "Hardcoded password in delete_user: The function delete_user contains a hardcoded password literal \"fake-delete-password-222\" which is used as a query parameter. Hardcoded credentials pose a security risk as they can be exposed in source code and may be used by attackers. This should be replaced with a secure credential management approach."
+    },
+    {
+      "file": "python/py_13_mixed.py",
+      "line": 16,
+      "category": "SECURITY",
+      "severity": "MEDIUM",
+      "description": "Potential path traversal in delete_user due to unsanitized user_id: The delete_user function constructs a URL using an f-string that directly interpolates the user_id parameter. If user_id contains malicious characters such as slashes or encoded sequences, it could lead to path traversal or unintended resource access. Input validation or sanitization should be applied."
+    },
+    {
+      "file": "python/py_13_mixed.py",
+      "line": 14,
+      "category": "SECURITY",
+      "severity": "CRITICAL",
+      "description": "Potential secret committed in the diff: A new line appears to contain a hard-coded credential. Move it to a secret store and rotate it."
+    },
+    {
+      "file": "python/py_13_mixed.py",
+      "line": 9,
+      "category": "PERFORMANCE",
+      "severity": "MEDIUM",
+      "description": "Repeated list concatenation in loop: The code uses `names = names + [user[\"name\"]]` inside a loop, which creates a new list on each iteration and leads to O(n\u00b2) time and memory usage. Use `names.append(user[\"name\"])` instead."
+    },
+    {
+      "file": "python/py_13_mixed.py",
+      "line": 9,
+      "category": "PERFORMANCE",
+      "severity": "MEDIUM",
+      "description": "Repeated list concatenation is inefficient: Using list = list + [item] inside a loop creates a new list object on every iteration, causing O(n\u00b2) memory copying. Use list.append(item) instead."
+    },
+    {
+      "file": "python/py_13_mixed.py",
+      "line": 20,
+      "category": "BUG",
+      "severity": "HIGH",
+      "description": "Missing default in next() leading to StopIteration: The function `find_user` uses `next(user for user in users if user[\"id\"] == user_id)` without providing a default value. If no user matches the condition, this will raise a `StopIteration` exception, causing the caller to crash. The function should either provide a default (e.g., `next(..., None)`) or handle the exception and return a meaningful value such as `None` or raise a custom error."
+    },
+    {
+      "file": "python/py_13_mixed.py",
+      "line": 9,
+      "category": "PERFORMANCE",
+      "severity": "LOW",
+      "description": "Inefficient list concatenation in load_users: Inside the loop in `load_users`, the code performs `names = names + [user[\"name\"]]`. This creates a new list on every iteration, resulting in O(n^2) time complexity. Using `names.append(user[\"name\"])` would be more efficient and clearer."
+    },
+    {
+      "file": "python/py_14_all.py",
+      "line": 1,
+      "category": "SECURITY",
+      "severity": "HIGH",
+      "description": "Hardcoded password: The code defines a plaintext password literal in the variable PASSWORD, which can expose sensitive credentials if the repository is accessed by unauthorized users."
+    },
+    {
+      "file": "python/py_14_all.py",
+      "line": 23,
+      "category": "SECURITY",
+      "severity": "HIGH",
+      "description": "SQL injection vulnerability: The get_data function constructs an SQL query by concatenating user input directly into the query string, making it susceptible to SQL injection attacks. The query also lacks a closing quote, which may lead to syntax errors or unintended behavior."
+    },
+    {
+      "file": "python/py_14_all.py",
+      "line": 1,
+      "category": "SECURITY",
+      "severity": "CRITICAL",
+      "description": "Potential secret committed in the diff: A new line appears to contain a hard-coded credential. Move it to a secret store and rotate it."
+    },
+    {
+      "file": "python/py_14_all.py",
+      "line": 23,
+      "category": "SECURITY",
+      "severity": "HIGH",
+      "description": "SQL appears to be built through string concatenation: Use parameterized queries or a query builder for untrusted input."
+    },
+    {
+      "file": "python/py_14_all.py",
+      "line": 5,
+      "category": "PERFORMANCE",
+      "severity": "HIGH",
+      "description": "Nested loops causing O(n*m) complexity: The function ProcessUsers contains a nested loop: for each user_id in ids, it iterates over all users. This results in O(n*m) time complexity, which can be inefficient for large datasets."
+    },
+    {
+      "file": "python/py_14_all.py",
+      "line": 19,
+      "category": "PERFORMANCE",
+      "severity": "MEDIUM",
+      "description": "Repeated string concatenation in a loop: In save_report, the report string is built using += inside a loop. This creates a new string on each iteration, leading to O(n^2) time and memory usage. Use a list and join instead."
+    },
+    {
+      "file": "python/py_14_all.py",
+      "line": 16,
+      "category": "PERFORMANCE",
+      "severity": "MEDIUM",
+      "description": "Unclosed file resource: The file opened in save_report is not closed or managed with a context manager. This can lead to resource leaks. Use 'with open(...) as f:' to ensure proper cleanup."
+    },
+    {
+      "file": "python/py_14_all.py",
+      "line": 16,
+      "category": "PERFORMANCE",
+      "severity": "MEDIUM",
+      "description": "Unclosed file resource leak: The file handle is opened with open() but never closed with file.close() or managed inside a 'with open(...) as file:' context manager. Unclosed file handles leak OS file descriptors and delay flushing data to disk."
+    },
+    {
+      "file": "python/py_14_all.py",
+      "line": 23,
+      "category": "PERFORMANCE",
+      "severity": "LOW",
+      "description": "Unbounded column selection: Prefer explicit columns for hot paths."
+    },
+    {
+      "file": "python/py_14_all.py",
+      "line": 11,
+      "category": "BUG",
+      "severity": "HIGH",
+      "description": "IndexError when output list is empty: In ProcessUsers, if no matching users are found, the function attempts to return output[0] when output is an empty list, causing an IndexError."
+    },
+    {
+      "file": "python/py_14_all.py",
+      "line": 23,
+      "category": "BUG",
+      "severity": "HIGH",
+      "description": "SQL query string missing closing quote and vulnerable to injection: The get_data function constructs a SQL query by concatenating the name parameter without a closing quote or parameterization, leading to a syntax error and potential SQL injection."
+    },
+    {
+      "file": "python/py_14_all.py",
+      "line": 16,
+      "category": "BUG",
+      "severity": "MEDIUM",
+      "description": "File handle not closed in save_report: save_report opens a file with open() but never closes it, causing a resource leak. Use a with statement to ensure the file is closed."
+    },
+    {
+      "file": "python/py_14_all.py",
+      "line": 3,
+      "category": "STYLE",
+      "severity": "LOW",
+      "description": "Non-standard function naming: PascalCase: ProcessUsers is defined using PascalCase, which is not idiomatic for Python functions. Use snake_case instead."
+    },
+    {
+      "file": "python/py_14_all.py",
+      "line": 18,
+      "category": "PERFORMANCE",
+      "severity": "LOW",
+      "description": "Inefficient string concatenation in save_report: Building the report string by repeatedly concatenating in a loop results in O(n^2) time. Use str.join or write directly to the file."
+    },
+    {
+      "file": "python/py_15_all.py",
+      "line": 3,
+      "category": "SECURITY",
+      "severity": "HIGH",
+      "description": "Hardcoded API Key: The file defines a global variable API_KEY with a literal value \"fake-live-key-555\", exposing a secret key in source code. This can lead to credential leakage if the repository is shared or compromised."
+    },
+    {
+      "file": "python/py_15_all.py",
+      "line": 16,
+      "category": "SECURITY",
+      "severity": "HIGH",
+      "description": "Hardcoded Admin Credentials: The authenticate function checks for a hardcoded username \"admin\" and password \"fake-admin-123\". Storing credentials in plaintext and performing direct string comparison is insecure and can be easily bypassed or leaked."
+    },
+    {
+      "file": "python/py_15_all.py",
+      "line": 3,
+      "category": "SECURITY",
+      "severity": "CRITICAL",
+      "description": "Potential secret committed in the diff: A new line appears to contain a hard-coded credential. Move it to a secret store and rotate it."
+    },
+    {
+      "file": "python/py_15_all.py",
+      "line": 8,
+      "category": "PERFORMANCE",
+      "severity": "HIGH",
+      "description": "N+1 External API Calls: The function fetch_all performs a separate HTTP GET request for each URL in the list, which can lead to performance bottlenecks and increased latency. Consider batching requests or using asynchronous I/O to reduce the number of round-trips."
+    },
+    {
+      "file": "python/py_15_all.py",
+      "line": 9,
+      "category": "PERFORMANCE",
+      "severity": "MEDIUM",
+      "description": "Repeated List Concatenation in Loop: Using results = results + response.json() inside the loop creates a new list on each iteration, resulting in O(n^2) time complexity. Use results.extend(response.json()) or list.append() to avoid repeated copying."
+    },
+    {
+      "file": "python/py_15_all.py",
+      "line": 13,
+      "category": "BUG",
+      "severity": "HIGH",
+      "description": "Division by zero in average(): The average() function divides by len(values) without checking if values is empty, leading to a ZeroDivisionError when called with an empty list."
+    },
+    {
+      "file": "python/py_15_all.py",
+      "line": 23,
+      "category": "STYLE",
+      "severity": "MEDIUM",
+      "description": "Bare except clause in format_data(): The except clause in format_data() catches all exceptions without specifying the exception type, which can hide bugs and make debugging harder. It should catch specific exceptions such as KeyError or TypeError, or use data.get(\"value\") instead."
+    },
+    {
+      "file": "python/py_15_all.py",
+      "line": 13,
+      "category": "BUG",
+      "severity": "HIGH",
+      "description": "Division by zero in process_orders: The function divides an accumulated total by len(orders) without checking if orders is empty. Passing an empty list causes a ZeroDivisionError. Add a guard check 'if not orders: return 0' before performing division."
+    },
+    {
+      "file": "python/py_15_all.py",
+      "line": 23,
+      "category": "STYLE",
+      "severity": "MEDIUM",
+      "description": "Bare except catches all exceptions: A bare except: clause catches every exception including SystemExit and KeyboardInterrupt. Specify the exception types you intend to handle (e.g. except ValueError:) to avoid silencing unexpected errors."
     }
   ]
 }

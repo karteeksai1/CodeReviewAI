@@ -93,6 +93,7 @@ async def groq_json(system: str, user: str, *, temperature: float = 0.1, is_warm
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
             ],
+            "max_tokens": int(os.getenv("GROQ_MAX_TOKENS", "4096")),
         }
         timeout = httpx.Timeout(float(os.getenv("GROQ_TIMEOUT_SECONDS", "30")))
         for attempt in range(5):
@@ -128,7 +129,21 @@ async def groq_json(system: str, user: str, *, temperature: float = 0.1, is_warm
                     except json.JSONDecodeError:
                         match = re.search(r"\{.*\}", cleaned, re.DOTALL)
                         if match:
-                            return json.loads(match.group(0))
+                            try:
+                                return json.loads(match.group(0))
+                            except Exception:
+                                pass
+                        last_obj_end = cleaned.rfind("}")
+                        if last_obj_end != -1:
+                            candidate = cleaned[:last_obj_end + 1]
+                            if candidate.count("[") > candidate.count("]"):
+                                candidate += "]"
+                            if candidate.count("{") > candidate.count("}"):
+                                candidate += "}"
+                            try:
+                                return json.loads(candidate)
+                            except Exception:
+                                pass
                         raise
                 except Exception as jde:
                     logger.error("Failed to parse Groq response as JSON", content=content[:300], error=str(jde))
@@ -143,6 +158,7 @@ async def groq_json(system: str, user: str, *, temperature: float = 0.1, is_warm
                     logger.warning("Groq json_validate_failed; retrying without response_format constraint", attempt=attempt)
                     payload = dict(payload)
                     del payload["response_format"]
+                    await asyncio.sleep(1.0)
                     continue
                 if e.response.status_code == 429 and attempt < 4:
                     match = re.search(r"try again in ([\d\.]+)s", e.response.text)

@@ -35,6 +35,10 @@ def normalize_file_path(path_str):
         p = "python/" + p.split("python/", 1)[1]
     elif "javascript/" in p:
         p = "javascript/" + p.split("javascript/", 1)[1]
+    elif p.startswith("py_"):
+        p = "python/" + p
+    elif p.startswith("js_") or p.startswith("ts_"):
+        p = "javascript/" + p
     return p
 
 def normalize_category(cat):

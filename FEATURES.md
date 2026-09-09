@@ -101,25 +101,26 @@ CodeReviewAI includes a built-in automated evaluation framework (`evals/`) to co
   - **Severity Accuracy**: Precision of the predicted severity ratings on true positive matches.
   - **Category Breakdown**: Granular recall per category (Security, Bug, Performance, Style).
 
-#### Baseline Benchmark Performance (Review ID: 94)
+#### Benchmark Performance (Review ID: 100)
 
-| Metric | Result |
-|--------|--------|
-| **Ground Truth Findings** | 74 |
-| **Predicted Findings** | 29 |
-| **True Positives (TP)** | 22 |
-| **False Positives (FP)** | 7 |
-| **False Negatives (FN)** | 52 |
-| **Precision** | **75.86%** |
-| **Recall** | **29.73%** |
-| **F1 Score** | **42.72%** |
-| **Severity Accuracy** | **81.82%** |
+| Metric | Baseline (Review 94) | Latest (Review 100) | Net Progression |
+|--------|----------------------|---------------------|-----------------|
+| **Files Processed** | 30 / 30 | **30 / 30 (0 failures)** | Clean Execution |
+| **Ground Truth Findings** | 74 | **74** | — |
+| **Predicted Findings** | 29 | **125** | +96 |
+| **True Positives (TP)** | 22 | **62** | **+40** |
+| **False Positives (FP)** | 7 | **63** | +56 |
+| **False Negatives (FN)** | 52 | **12** | **-40** |
+| **Precision** | **75.86%** | **49.60%** | -26.26% |
+| **Recall** | **29.73%** | **83.78%** | **+54.05%** |
+| **F1 Score** | **42.72%** | **62.31%** | **+19.59%** |
+| **Severity Accuracy** | **81.82%** | **64.52%** | -17.30% |
 
-**Category-wise Recall**:
-- **Security**: 14/22 (63.64%)
-- **Bug**: 4/15 (26.67%)
-- **Performance**: 3/18 (16.67%)
-- **Style**: 1/19 (5.26%)
+**Category-wise Recall Progression**:
+- **Bug**: 4/15 (26.67%) → **14/15 (93.33%)** (+66.66%)
+- **Performance**: 3/18 (16.67%) → **14/18 (77.78%)** (+61.11%)
+- **Security**: 14/22 (63.64%) → **19/22 (86.36%)** (+22.72%)
+- **Style**: 1/19 (5.26%) → **15/19 (78.95%)** (+73.69%)
 
 ---
 

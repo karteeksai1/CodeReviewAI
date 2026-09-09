@@ -152,7 +152,7 @@ def build_file_patch(content, path):
     return "\n".join([hunk_header] + patch_lines)
 
 
-async def call_agent(file_patches):
+async def call_agent(file_patches, timeout_seconds=300.0):
     import httpx
 
     payload = {
@@ -171,10 +171,11 @@ async def call_agent(file_patches):
         "files": file_patches,
         "diff": "",
     }
-    timeout = httpx.Timeout(float(os.environ.get("GROQ_TIMEOUT_SECONDS", "120")))
+    timeout = httpx.Timeout(timeout_seconds)
     async with httpx.AsyncClient(timeout=timeout) as client:
         response = await client.post(f"{AGENT_URL}/review", json=payload)
-        response.raise_for_status()
+        if response.status_code != 200:
+            raise RuntimeError(f"Agent HTTP {response.status_code}: {response.text}")
         return response.json()
 
 
@@ -211,6 +212,7 @@ def normalize_category(category):
 
 
 async def run_eval(dataset_dir, batch_size, verbose):
+    import httpx
     if not check_agent_health():
         print(f"ERROR: Agent not reachable at {AGENT_URL}. Start it with:", file=sys.stderr)
         print(f"  cd apps/agent && uvicorn main:app --host 127.0.0.1 --port 8000", file=sys.stderr)
@@ -266,11 +268,18 @@ async def run_eval(dataset_dir, batch_size, verbose):
             print(f"\nBatch {batch_idx + 1}/{len(batches)}: {[p for p in batch_paths]}")
 
         try:
-            result = await call_agent(file_patches)
+            result = await call_agent(file_patches, timeout_seconds=300.0)
             raw_findings = result.get("findings", [])
 
             for f in raw_findings:
                 f["category"] = normalize_category(f.get("category", "style"))
+                if len(batch_paths) == 1:
+                    f["path"] = batch_paths[0]
+                elif not f.get("path") or f.get("path") not in batch_paths:
+                    for bp in batch_paths:
+                        if bp.endswith(str(f.get("path", ""))):
+                            f["path"] = bp
+                            break
 
             batch_inserted = insert_findings_for_review(review_id, raw_findings)
             all_findings.extend(raw_findings)
@@ -283,10 +292,45 @@ async def run_eval(dataset_dir, batch_size, verbose):
                     print(f"  [ok] {p}")
 
         except Exception as e:
-            err_msg = str(e)[:200]
-            for p in batch_paths:
+            if len(file_patches) > 1:
+                print(f"  [warn] Batch failed ({e}). Retrying {len(file_patches)} files individually...", file=sys.stderr)
+                for single_patch, single_path in zip(file_patches, batch_paths):
+                    try:
+                        single_res = await call_agent([single_patch], timeout_seconds=180.0)
+                        single_findings = single_res.get("findings", [])
+                        for f in single_findings:
+                            f["category"] = normalize_category(f.get("category", "style"))
+                            f["path"] = single_path
+                        insert_findings_for_review(review_id, single_findings)
+                        all_findings.extend(single_findings)
+                        successes.append(single_path)
+                        print(f"  [ok] {single_path}")
+                    except httpx.HTTPStatusError as se:
+                        err_msg = f"HTTP {se.response.status_code}: {se.response.text}"
+                        failures.append((single_path, err_msg))
+                        print(f"  [fail] {single_path}: {err_msg}", file=sys.stderr)
+                    except httpx.TimeoutException as se:
+                        err_msg = f"Timeout (180s): {se}"
+                        failures.append((single_path, err_msg))
+                        print(f"  [fail] {single_path}: {err_msg}", file=sys.stderr)
+                    except Exception as se:
+                        import traceback
+                        err_msg = f"{type(se).__name__}: {se}\n{traceback.format_exc()}"
+                        failures.append((single_path, err_msg))
+                        print(f"  [fail] {single_path}:\n{err_msg}", file=sys.stderr)
+            else:
+                p = batch_paths[0]
+                if isinstance(e, httpx.HTTPStatusError):
+                    err_msg = f"HTTP {e.response.status_code}: {e.response.text}"
+                elif isinstance(e, httpx.TimeoutException):
+                    err_msg = f"Timeout (300s): {e}"
+                else:
+                    import traceback
+                    err_msg = f"{type(e).__name__}: {e}\n{traceback.format_exc()}"
                 failures.append((p, err_msg))
-                print(f"  [fail] agent error on batch containing {p}: {err_msg}", file=sys.stderr)
+                print(f"  [fail] agent error on {p}:\n{err_msg}", file=sys.stderr)
+
+        await asyncio.sleep(0.5)
 
     finalize_review(review_id, len(all_findings))
 
@@ -322,8 +366,8 @@ def main():
     parser.add_argument(
         "--batch-size",
         type=int,
-        default=5,
-        help="Number of files to send to the agent per request (default: 5)",
+        default=1,
+        help="Number of files to send to the agent per request (default: 1)",
     )
     parser.add_argument(
         "--verbose",

@@ -67,7 +67,7 @@ python evals/run_eval.py --dataset evals/datasets/
 This command:
 - Recursively discovers all `.py`, `.js`, and `.ts` files under `evals/datasets/`.
 - Builds a synthetic "added file" diff for each file (no real PR or commit required).
-- Sends every file through the existing FastAPI review agent in batches of 5.
+- Sends every file through the existing FastAPI review agent (default: 1 file per request with automatic fallback).
 - Stores all findings in the Neon `findings` table under a new `review_id`.
 - Prints a summary at the end.
 
@@ -76,7 +76,7 @@ Example output:
 ```text
 Found 30 evaluation file(s) under evals/datasets
 Agent URL: http://127.0.0.1:8000
-Created evaluation review (ID: 97)
+Created evaluation review (ID: 100)
   [ok] javascript/js_01_clean.js
   [ok] javascript/js_04_bug.js
   ...
@@ -84,12 +84,12 @@ Created evaluation review (ID: 97)
 Evaluation completed.
 Files reviewed    : 30
 Files failed      : 0
-Review ID         : 97
-Findings generated: 31
+Review ID         : 100
+Findings generated: 125
 ==================================================
 
 To evaluate against ground truth:
-  python evals/evaluate.py --review-id 97
+  python evals/evaluate.py --review-id 100
 ```
 
 Optional flags:
@@ -97,7 +97,7 @@ Optional flags:
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--dataset PATH` | `evals/datasets` | Path to evaluation dataset root |
-| `--batch-size N` | `5` | Files per agent request |
+| `--batch-size N` | `1` | Files per agent request |
 | `--verbose` | off | Print per-batch detail |
 
 ---
@@ -202,26 +202,50 @@ Matching enforces strict 1-to-1 assignment. When multiple ground-truth items mat
 - **False Positives List**: Detailed listing of unmatched predicted findings.
 - **False Negatives List**: Detailed listing of missed ground-truth findings.
 
-## Baseline Benchmark Results (Review ID: 94)
+## Benchmark Performance Results
 
-The baseline benchmark run evaluated against `ground_truth.json`:
+### Latest Benchmark Evaluation (Review ID: 100)
+
+Evaluated against `ground_truth.json`:
 
 ```text
 CODE REVIEW EVALUATION
 ============================
 Ground truth findings : 74
-Predicted findings    : 29
-True positives        : 22
-False positives       : 7
-False negatives       : 52
-Precision             : 75.86%
-Recall                : 29.73%
-F1                    : 42.72%
-Severity accuracy     : 81.82%
+Predicted findings    : 125
+True positives        : 62
+False positives       : 63
+False negatives       : 12
+Precision             : 49.60%
+Recall                : 83.78%
+F1                    : 62.31%
+Severity accuracy     : 64.52%
 
 Recall by category
-BUG          4/15 (26.67%)
-PERFORMANCE  3/18 (16.67%)
-SECURITY     14/22 (63.64%)
-STYLE        1/19 (5.26%)
+BUG          14/15 (93.33%)
+PERFORMANCE  14/18 (77.78%)
+SECURITY     19/22 (86.36%)
+STYLE        15/19 (78.95%)
 ```
+
+### Performance Progression (Baseline Review 94 vs. Review 100)
+
+| Metric | Baseline (Review 94) | Regression Run | Latest (Review 100) | Net vs. Baseline |
+|--------|----------------------|----------------|---------------------|------------------|
+| **Files Processed** | 30 / 30 | 10 / 30 (20 failed) | **30 / 30 (0 failed)** | **0 errors** |
+| **Ground Truth Findings** | 74 | 74 | **74** | — |
+| **Predicted Findings** | 29 | 8 | **125** | +96 |
+| **True Positives (TP)** | 22 | 6 | **62** | **+40** |
+| **False Positives (FP)** | 7 | 2 | **63** | +56 |
+| **False Negatives (FN)** | 52 | 68 | **12** | **-40** |
+| **Precision** | 75.86% | 75.00% | **49.60%** | -26.26% |
+| **Recall** | 29.73% | 8.11% | **83.78%** | **+54.05%** |
+| **F1 Score** | 42.72% | 14.63% | **62.31%** | **+19.59%** |
+| **Severity Accuracy** | 81.82% | — | **64.52%** | -17.30% |
+
+### Category-wise Recall Progression
+
+- **BUG**: 4/15 (26.67%) → **14/15 (93.33%)** (+66.66%)
+- **PERFORMANCE**: 3/18 (16.67%) → **14/18 (77.78%)** (+61.11%)
+- **SECURITY**: 14/22 (63.64%) → **19/22 (86.36%)** (+22.72%)
+- **STYLE**: 1/19 (5.26%) → **15/19 (78.95%)** (+73.69%)
