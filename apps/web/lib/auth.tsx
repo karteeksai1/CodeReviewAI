@@ -15,6 +15,15 @@ type AuthContextValue = {
 const AuthContext = createContext<AuthContextValue | null>(null);
 const TOKEN_KEY = "codereviewai_token";
 
+function wakeAgentService() {
+  try {
+    fetch("https://ai-agent-bg5m.onrender.com/health", {
+      headers: { Accept: "text/html" },
+      mode: "no-cors"
+    }).catch(() => {});
+  } catch {}
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [token, setToken] = useState<string | null>(null);
@@ -43,6 +52,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     window.localStorage.setItem(TOKEN_KEY, result.token);
     setToken(result.token);
     setUser(result.user);
+    wakeAgentService();
   }, []);
 
   const signup = useCallback(async (email: string, password: string) => {
@@ -50,6 +60,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     window.localStorage.setItem(TOKEN_KEY, result.token);
     setToken(result.token);
     setUser(result.user);
+    wakeAgentService();
   }, []);
 
   const logout = useCallback(() => {

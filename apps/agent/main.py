@@ -8,6 +8,7 @@ import httpx
 import structlog
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from llm.groq import request_id_var, token_usage_var
@@ -31,6 +32,27 @@ logger.info(
 )
 
 app = FastAPI(title="CodeReviewAI Agent")
+
+allowed_origins = [
+    "http://localhost:3000",
+    "https://code-review-ai-web-sandy.vercel.app",
+    "https://ai-agent-bg5m.onrender.com",
+]
+env_origins = os.getenv("ALLOWED_ORIGINS", os.getenv("FRONTEND_URL", ""))
+if env_origins:
+    for orig in env_origins.split(","):
+        orig = orig.strip()
+        if orig and orig not in allowed_origins:
+            allowed_origins.append(orig)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
+    allow_origin_regex=r"https://.*\.onrender\.com|https://.*\.vercel\.app",
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 class FilePatch(BaseModel):
